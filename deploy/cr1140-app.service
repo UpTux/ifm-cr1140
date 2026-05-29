@@ -4,7 +4,7 @@ After=multi-user.target
 
 [Service]
 Type=simple
-ExecStart=/home/cds-apps/demo /dev/input/event0
+ExecStart=/home/cds-apps/demo /dev/input/event1
 Restart=on-failure
 
 [Install]

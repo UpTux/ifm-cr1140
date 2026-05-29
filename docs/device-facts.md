@@ -48,41 +48,56 @@ sections by running `cr1140-recon.sh` on the device (Task 0.2).
   `ifm-ecopanel@.service` (the splash/launcher; `/usr/bin/ifm-ecopanel`).
   Decide per-service whether to keep (e.g. networkmanager) when replacing CODESYS.
 
-## App / persistence locations  [offline ✓ / live TBD]
+## App / persistence locations  [offline ✓ / live ✓]
 
-- CODESYS apps: `/home/cds-apps` (root-owned).
-- Proposed deploy dir for our binary: **`/home/cds-apps`** or `/usr/local/bin`
-  (both persist via overlay). Plan/justfile placeholder `/run-app` → replace
-  with the chosen dir. **[live]** confirm it is writable and survives reboot.
+- CODESYS apps: `/home/cds-apps` (root-owned, currently empty).
+- Mounts (live): `/` is the rw **overlay** (upper on `/dev/mmcblk0p2`, 1.1 GB
+  free); read-only base is `/dev/root` at `/rom`. Dedicated **data partition
+  `/dev/mmcblk0p3` mounted at `/mnt/updata`** (ext4 rw, ~796 MB free).
+- **Deploy dir chosen: `/home/cds-apps`** (persists via the p2 overlay; verified
+  writable, our `hello` binary ran from there). Alternative: `/mnt/updata` (p3).
+- SSH login confirmed: user **`root`** (uid 0), password kept out of git.
+  Hostname `ecomat-display`.
 
-## Display  [offline ✓]
+## Display  [offline ✓ / live ✓]
 
-- **fbdev (linuxfb)**, **800×480**, panel 142×82 mm. CODESYS runs Qt with
-  `QT_QPA_PLATFORM=linuxfb:size=800x480:mmsize=142x82`.
-- → HAL uses the **fbdev backend**; `/dev/fb0` expected. **DRM backend (plan
-  Task 2.3) is SKIPPED.**
-- Backlight sysfs path + bits-per-pixel/stride: **[live]** (confirm `/dev/fb0`,
-  `/sys/class/graphics/fb0/*`, `/sys/class/backlight/*`).
+- **fbdev**, **800×480, 32 bpp, stride 3200** (`/dev/fb0`, name `mxsfb-drmdrmfb`
+  — mxsfb DRM driver with fbdev emulation; `/dev/dri/card0` also present, DPI-1
+  connector). Matches HAL xRGB8888 `Surface` exactly.
+- HAL uses the **fbdev backend**. **DRM backend (plan Task 2.3) SKIPPED.**
+- Backlight: `/sys/class/backlight/backlight/` (`max_brightness=400`).
+- Display fd currently held by `ifm-local-setup` (pid 264); no active CODESYS /
+  weston / ecopanel visu.
 
-## Input  [live TBD]
+## Input  [live ✓]
 
-- Keypad event node `/dev/input/eventN`: **[live]** from `/proc/bus/input/devices`.
-- Physical → keycode map (F1–F6, arrows, Enter): **[live]** captured in Task 3.3.
+- Keypad: **`ifm-keypad` → `/dev/input/event1`** (gpio-keys). (event0 =
+  snvs-powerkey, event2 = bd718xx-pwrkey — both ignored.)
+- Physical → keycode map (F1–F6, arrows, Enter): **[live, Task 3.3]** — needs
+  physical button presses to capture.
 
-## CAN  [live TBD]
+## CAN  [live ✓]
 
-- Interfaces `can0`/`can1` and default bitrate: **[live]** (`ls /sys/class/net/`,
-  recon §3). ifm factory default expected 250 kbit/s.
+- **`can0` only**, driver **mcp251xfd** (SPI CAN-FD controller, 40 MHz clock,
+  on `spi2.0`). Currently DOWN/STOPPED. Bring up: `ip link set can0 up type can
+  bitrate 250000`.
+- Ethernet: `eth0` UP (fec, `30be0000.ethernet`, MAC 00:02:01:ab:bd:49).
 
-## LEDs  [live TBD]
+## LEDs  [live ✓]
 
-- Entries under `/sys/class/leds/`: **[live]**. Status LED also controllable via
-  U-Boot env `ifm_boot_status_led` and possibly `fw_setenv`.
+- `/sys/class/leds/`:
+  - **status LED** (binary, `max_brightness=1`): `red:status`, `green:status`,
+    `blue:status`.
+  - **keypad backlight** (`max_brightness=255`): `red:kbd_backlight`,
+    `green:kbd_backlight`, `blue:kbd_backlight`.
+  - `mmc0::` (activity).
+- For a visible brightness ramp use a `*:kbd_backlight`; status LEDs are on/off.
 
-## Recovery & restore  [live TBD — Task 0.3]
+## Recovery & restore  [live ✓ — Task 0.3]
 
-- Stock state of `codesys.service` (`is-enabled`/`is-active`): **[live]**.
-- Re-enable command: `systemctl unmask codesys && systemctl enable --now codesys`.
+- **Stock state of `codesys.service`: `disabled` + `inactive`** (fresh delivery,
+  no CODESYS project loaded). `ifm-retain-srv.service` is `enabled`.
+- ⚠️ Therefore "restore to stock" = `systemctl unmask codesys` and leave it
+  **disabled** (NOT `enable --now`). `restore-codesys.sh` updated accordingly.
 - Ultimate fallback: re-flash stock firmware via the delivery `.swu`
   (USB-stick update path per `sw-description`).
-- **Do not disable CODESYS until this section is filled.**

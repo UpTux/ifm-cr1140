@@ -2,7 +2,7 @@
 //! temperature, and best-effort opens CAN. Replaces the CODESYS visu.
 //!
 //! Usage: demo [event-node] [led-name] [can-iface]
-//!   defaults: /dev/input/event0  (no led)  can0
+//!   defaults: /dev/input/event1  (no led)  can0
 
 #[cfg(target_os = "linux")]
 fn main() -> std::io::Result<()> {
@@ -12,7 +12,7 @@ fn main() -> std::io::Result<()> {
     use cr1140_hal::sys::{read_temp_c, set_led};
 
     let mut args = std::env::args().skip(1);
-    let event_node = args.next().unwrap_or_else(|| "/dev/input/event0".into());
+    let event_node = args.next().unwrap_or_else(|| "/dev/input/event1".into());
     let led = args.next();
     let can_iface = args.next().unwrap_or_else(|| "can0".into());
 
