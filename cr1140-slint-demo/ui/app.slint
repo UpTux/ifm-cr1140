@@ -63,7 +63,8 @@ export component AppWindow inherits Window {
     in property <string> eth-text: "—";
     in property <string> uptime: "—";
     in property <string> last-key: "—";
-    in property <bool> led-on;
+    in property <string> led-text: "off";
+    in property <color> led-color: #5a6b7a;
 
     VerticalLayout {
         padding: 28px;
@@ -134,8 +135,8 @@ export component AppWindow inherits Window {
             }
             Rectangle { horizontal-stretch: 1; }
             Text {
-                text: root.led-on ? "LED ON" : "LED off";
-                color: root.led-on ? #6dff9e : #5a6b7a;
+                text: "LED " + root.led-text;
+                color: root.led-color;
                 font-size: 15px;
                 horizontal-stretch: 0;
             }
@@ -149,7 +150,7 @@ export component AppWindow inherits Window {
 
         Rectangle { vertical-stretch: 1; }      // push hint to the bottom
         Text {
-            text: "▲ / ▼ backlight  ·  Enter toggles keypad LED";
+            text: "▲ / ▼ backlight  ·  Enter cycles keypad LED color";
             color: #4a5d70;
             font-size: 12px;
         }

@@ -21,7 +21,7 @@ mod platform;
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     use cr1140_hal::display::FbDisplay;
     use cr1140_hal::input::{Button, ButtonEvent, ButtonReader};
-    use cr1140_hal::sys::{backlight_max, read_temp_c, set_backlight, set_led};
+    use cr1140_hal::sys::{backlight_max, read_temp_c, set_backlight, set_kbd_backlight};
     use metrics::{
         format_uptime, hostname, iface_ipv4, mem_used_percent, os_release_value, parse_meminfo,
         parse_uptime, read_board_temp_c, read_loadavg, read_operstate, CpuSampler,
@@ -34,7 +34,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     use std::time::{Duration, Instant};
 
     const BACKLIGHT: &str = "backlight";
-    const LED: &str = "green:kbd_backlight";
+    // Keypad LED palette Enter cycles through: (name, r, g, b).
+    const PALETTE: &[(&str, u8, u8, u8)] = &[
+        ("off", 0, 0, 0),
+        ("green", 0, 255, 0),
+        ("yellow", 255, 255, 0),
+        ("orange", 255, 90, 0),
+        ("red", 255, 0, 0),
+        ("blue", 0, 0, 255),
+    ];
 
     let event_node = std::env::args().nth(1).unwrap_or_else(|| "/dev/input/event1".into());
 
@@ -48,8 +56,22 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Start mid-brightness so the Up/Down demo has headroom in both directions.
     let mut backlight = bl_max / 2;
     let _ = set_backlight(BACKLIGHT, backlight);
-    let mut led_on = false;
-    let _ = set_led(LED, 0);
+    let mut led_idx = 0usize; // start on "off"
+    let _ = set_kbd_backlight(0, 0, 0);
+
+    // Push the current palette entry to the keypad LED and the UI (name shown in
+    // the LED's own color; "off" uses a muted gray so the label stays readable).
+    let push_led = |ui: &AppWindow, idx: usize| {
+        let (name, r, g, b) = PALETTE[idx];
+        let _ = set_kbd_backlight(r, g, b);
+        ui.set_led_text(name.into());
+        let swatch = if name == "off" {
+            slint::Color::from_rgb_u8(0x5a, 0x6b, 0x7a)
+        } else {
+            slint::Color::from_rgb_u8(r, g, b)
+        };
+        ui.set_led_color(swatch);
+    };
 
     // --- set up Slint on our custom platform ---
     let window = MinimalSoftwareWindow::new(RepaintBufferType::ReusedBuffer);
@@ -75,6 +97,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         ui.set_backlight_text(format!("{pct} %").into());
     };
     push_backlight(&ui, backlight);
+    push_led(&ui, led_idx);
 
     // --- static device identity (read once) ---
     ui.set_hostname(hostname().into());
@@ -108,9 +131,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         push_backlight(&ui, backlight);
                     }
                     Button::Enter => {
-                        led_on = !led_on;
-                        let _ = set_led(LED, if led_on { 255 } else { 0 });
-                        ui.set_led_on(led_on);
+                        led_idx = (led_idx + 1) % PALETTE.len();
+                        push_led(&ui, led_idx);
                     }
                     _ => {}
                 }

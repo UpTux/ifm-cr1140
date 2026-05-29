@@ -9,6 +9,16 @@ pub fn set_led(name: &str, value: u32) -> std::io::Result<()> {
     fs::write(format!("/sys/class/leds/{name}/brightness"), value.to_string())
 }
 
+/// Set the RGB keypad backlight color. The CR1140 keypad LED is three PWM
+/// channels (`red`/`green`/`blue:kbd_backlight`, each 0–255), so any color is a
+/// mix: e.g. yellow = (255,255,0), orange = (255,90,0), off = (0,0,0).
+pub fn set_kbd_backlight(r: u8, g: u8, b: u8) -> std::io::Result<()> {
+    set_led("red:kbd_backlight", r as u32)?;
+    set_led("green:kbd_backlight", g as u32)?;
+    set_led("blue:kbd_backlight", b as u32)?;
+    Ok(())
+}
+
 /// Set display backlight via `/sys/class/backlight/<name>/brightness`.
 pub fn set_backlight(name: &str, value: u32) -> std::io::Result<()> {
     fs::write(
