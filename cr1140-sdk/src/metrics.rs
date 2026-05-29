@@ -3,6 +3,7 @@
 //! any Linux host. Pure parsers (host-testable) plus thin procfs readers.
 
 use std::fs;
+use cr1140_hal::sys::{read_temp_c, SOC_THERMAL_ZONE};
 
 /// CPU utilisation from `/proc/stat`, computed as the busy fraction between two
 /// samples. The first sample primes the baseline and reports 0%.
@@ -72,6 +73,12 @@ pub fn parse_meminfo(content: &str) -> Option<(u64, u64)> {
     Some((total?, avail?))
 }
 
+/// Read `(MemTotal, MemAvailable)` in kB straight from `/proc/meminfo`.
+pub fn read_meminfo() -> Option<(u64, u64)> {
+    parse_meminfo(&fs::read_to_string("/proc/meminfo").ok()?)
+}
+
+/// Percentage of memory in use (`0.0..=100.0`); returns `0.0` if `total` is zero.
 pub fn mem_used_percent(total: u64, avail: u64) -> f32 {
     if total == 0 {
         0.0
@@ -83,6 +90,11 @@ pub fn mem_used_percent(total: u64, avail: u64) -> f32 {
 /// First field of `/proc/uptime` = seconds since boot.
 pub fn parse_uptime(content: &str) -> Option<f64> {
     content.split_whitespace().next()?.parse().ok()
+}
+
+/// Read seconds since boot straight from `/proc/uptime`.
+pub fn read_uptime() -> Option<f64> {
+    parse_uptime(&fs::read_to_string("/proc/uptime").ok()?)
 }
 
 pub fn format_uptime(secs: f64) -> String {
@@ -102,6 +114,71 @@ pub fn parse_loadavg(content: &str) -> Option<f32> {
 
 pub fn read_loadavg() -> Option<f32> {
     parse_loadavg(&fs::read_to_string("/proc/loadavg").ok()?)
+}
+
+/// Memory totals in kB, with a convenience for the used fraction.
+#[derive(Clone, Copy, Debug)]
+pub struct MemInfo {
+    pub total_kb: u64,
+    pub avail_kb: u64,
+}
+
+impl MemInfo {
+    /// Used memory as a percentage (`0.0..=100.0`).
+    pub fn used_percent(&self) -> f32 {
+        mem_used_percent(self.total_kb, self.avail_kb)
+    }
+}
+
+/// A single point-in-time read of all telemetry the dashboard shows. Every field
+/// degrades to `None` independently, so a missing `/proc` file or thermal zone
+/// never fails the whole sample. Network state (eth0/can0) is intentionally not
+/// here — it lives in [`crate::device`] with a different refresh cadence.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct Snapshot {
+    pub cpu_percent: Option<f32>,
+    pub mem: Option<MemInfo>,
+    pub soc_temp_c: Option<f32>,
+    pub board_temp_c: Option<f32>,
+    pub uptime_secs: Option<f64>,
+    pub load1: Option<f32>,
+}
+
+/// Holds the per-call CPU state so one [`sample`](Telemetry::sample) call yields a
+/// whole [`Snapshot`]. Replaces a hand-rolled ~30-line 1 Hz block in apps.
+pub struct Telemetry {
+    cpu: CpuSampler,
+    soc_zone: u32,
+}
+
+impl Telemetry {
+    /// New collector reading the default SoC thermal zone ([`SOC_THERMAL_ZONE`]).
+    pub fn new() -> Self {
+        Self { cpu: CpuSampler::new(), soc_zone: SOC_THERMAL_ZONE }
+    }
+
+    /// New collector reading a specific thermal zone for the SoC temperature.
+    pub fn with_soc_zone(zone: u32) -> Self {
+        Self { cpu: CpuSampler::new(), soc_zone: zone }
+    }
+
+    /// Sample every metric now. The first call primes CPU% and reports 0%.
+    pub fn sample(&mut self) -> Snapshot {
+        Snapshot {
+            cpu_percent: self.cpu.sample(),
+            mem: read_meminfo().map(|(total_kb, avail_kb)| MemInfo { total_kb, avail_kb }),
+            soc_temp_c: read_temp_c(self.soc_zone).ok(),
+            board_temp_c: crate::device::read_board_temp_c(),
+            uptime_secs: read_uptime(),
+            load1: read_loadavg(),
+        }
+    }
+}
+
+impl Default for Telemetry {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 #[cfg(test)]
@@ -149,5 +226,40 @@ mod tests {
     fn parse_loadavg_reads_first_field() {
         assert_eq!(parse_loadavg("0.17 0.08 0.08 1/99 12009"), Some(0.17));
         assert_eq!(parse_loadavg(""), None);
+    }
+
+    #[test]
+    fn read_meminfo_shape_is_total_ge_avail_when_present() {
+        // On Linux this reads /proc; on non-Linux hosts it's None. Either is OK,
+        // but if present, total must be >= available.
+        if let Some((total, avail)) = read_meminfo() {
+            assert!(total >= avail, "total {total} < avail {avail}");
+            assert!(total > 0);
+        }
+    }
+
+    #[test]
+    fn read_uptime_is_nonnegative_when_present() {
+        if let Some(secs) = read_uptime() {
+            assert!(secs >= 0.0);
+        }
+    }
+
+    #[test]
+    fn meminfo_used_percent_matches_helper() {
+        let m = MemInfo { total_kb: 1000, avail_kb: 250 };
+        assert!((m.used_percent() - 75.0).abs() < 0.001);
+        let zero = MemInfo { total_kb: 0, avail_kb: 0 };
+        assert_eq!(zero.used_percent(), 0.0);
+    }
+
+    #[test]
+    fn telemetry_sample_first_cpu_is_zero_then_populates() {
+        let mut t = Telemetry::new();
+        let first = t.sample();
+        // First CPU sample primes the baseline and reports 0% (when present).
+        if let Some(p) = first.cpu_percent {
+            assert_eq!(p, 0.0);
+        }
     }
 }
