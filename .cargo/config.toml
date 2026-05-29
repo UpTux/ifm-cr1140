@@ -1,0 +1,3 @@
+# Device defaults (override at the shell: CR1140_HOST=1.2.3.4 just run-example ...)
+[env]
+CR1140_HOST = "192.168.1.102"

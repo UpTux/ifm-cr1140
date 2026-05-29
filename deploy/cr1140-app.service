@@ -1,0 +1,11 @@
+[Unit]
+Description=CR1140 native Rust app
+After=multi-user.target
+
+[Service]
+Type=simple
+ExecStart=/home/cds-apps/demo /dev/input/event1
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target
