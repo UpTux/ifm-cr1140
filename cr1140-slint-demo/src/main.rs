@@ -12,21 +12,67 @@
 
 slint::include_modules!();
 
+/// Demo settings persisted to the p2 overlay so the panel comes back the way the
+/// user left it. `led_mode` is the F-key index (0=Solid..5=Heartbeat); the demo
+/// owns the index<->LedMode mapping so `cr1140-sdk::led` stays serde-free.
+#[cfg(target_os = "linux")]
+#[derive(serde::Serialize, serde::Deserialize)]
+struct DemoConfig {
+    backlight: u32,
+    color_idx: usize,
+    led_mode: u8,
+}
+
+#[cfg(target_os = "linux")]
+impl Default for DemoConfig {
+    fn default() -> Self {
+        // Mid-brightness, LED off, Solid mode — matches the previous hard-coded start.
+        Self { backlight: 0, color_idx: 0, led_mode: 0 }
+    }
+}
+
+#[cfg(target_os = "linux")]
+fn led_mode_from_index(i: u8) -> cr1140_sdk::led::LedMode {
+    use cr1140_sdk::led::LedMode;
+    match i {
+        1 => LedMode::Dim,
+        2 => LedMode::Pulse,
+        3 => LedMode::Blink,
+        4 => LedMode::Flash,
+        5 => LedMode::Heartbeat,
+        _ => LedMode::Solid,
+    }
+}
+
+#[cfg(target_os = "linux")]
+fn led_mode_to_index(m: cr1140_sdk::led::LedMode) -> u8 {
+    use cr1140_sdk::led::LedMode;
+    match m {
+        LedMode::Solid => 0,
+        LedMode::Dim => 1,
+        LedMode::Pulse => 2,
+        LedMode::Blink => 3,
+        LedMode::Flash => 4,
+        LedMode::Heartbeat => 5,
+    }
+}
+
 #[cfg(target_os = "linux")]
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     use cr1140_hal::display::FbDisplay;
     use cr1140_hal::input::{Button, ButtonEvent, ButtonReader};
-    use cr1140_hal::sys::{backlight_max, read_temp_c, set_backlight, BACKLIGHT, SOC_THERMAL_ZONE};
-    use cr1140_sdk::device::{hostname, iface_ipv4, os_release, read_board_temp_c, read_operstate};
+    use cr1140_hal::sys::{backlight_max, set_backlight, BACKLIGHT};
+    use cr1140_sdk::device::{hostname, iface_ipv4, os_release, read_operstate};
     use cr1140_sdk::led::{LedDriver, LedMode};
-    use cr1140_sdk::metrics::{
-        format_uptime, mem_used_percent, parse_meminfo, parse_uptime, read_loadavg, CpuSampler,
-    };
+    use cr1140_sdk::metrics::format_uptime;
+    use cr1140_sdk::{ShutdownGuard, Store, Telemetry, DEFAULT_APP_DIR};
     use cr1140_slint::{FbPlatform, Xrgb8888};
     use slint::platform::set_platform;
     use slint::platform::software_renderer::{MinimalSoftwareWindow, RepaintBufferType};
     use std::thread::sleep;
     use std::time::{Duration, Instant};
+
+    tracing_subscriber::fmt::init();
 
     // Keypad LED colors Enter cycles through: (name, r, g, b).
     const PALETTE: &[(&str, u8, u8, u8)] = &[
@@ -44,7 +90,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // driver can't grant a second buffer).
     let mut fb = FbDisplay::open_double_buffered("/dev/fb0")?;
     let (w, h) = (fb.width as usize, fb.height as usize);
-    println!(
+    tracing::info!(
         "display {}x{} bpp {} stride {} ({} buffer(s))",
         fb.width, fb.height, fb.bits_per_pixel, fb.stride, fb.buffer_count()
     );
@@ -55,13 +101,24 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     };
 
     let bl_max = backlight_max(BACKLIGHT).unwrap_or(400).max(1);
-    // Start mid-brightness so the Up/Down demo has headroom in both directions.
-    let mut backlight = bl_max / 2;
+    // Restore the panel + LED to their pre-launch state when we exit (RAII), and
+    // install the opt-in signal handler (this binary is standalone).
+    let guard = ShutdownGuard::capture()?;
+    guard.install_signal_handler()?;
+
+    // Load persisted demo settings (or defaults on first run / fresh overlay).
+    let store = Store::at(format!("{DEFAULT_APP_DIR}/cr1140-demo.toml"));
+    let cfg: DemoConfig = store.load_or_default().unwrap_or_default();
+    // Start from persisted backlight, or mid-brightness on first run.
+    let mut backlight = if cfg.backlight == 0 { bl_max / 2 } else { cfg.backlight.min(bl_max) };
     let _ = set_backlight(BACKLIGHT, backlight);
 
     // Keypad LED: a base color (Enter cycles PALETTE) × an animation mode (F1–F6).
     let mut led = LedDriver::new();
-    let mut color_idx = 0usize; // "off"
+    let mut color_idx = cfg.color_idx.min(PALETTE.len() - 1);
+    led.set_mode(led_mode_from_index(cfg.led_mode));
+    let (_, r0, g0, b0) = PALETTE[color_idx];
+    led.set_color((r0, g0, b0));
 
     // --- set up Slint on our custom platform ---
     let window = MinimalSoftwareWindow::new(RepaintBufferType::ReusedBuffer);
@@ -77,7 +134,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let pixel_stride = w;
     let mut buf = vec![Xrgb8888::default(); pixel_stride * h];
 
-    let mut cpu = CpuSampler::new();
+    let mut telemetry = Telemetry::new();
     let mut last_metrics = Instant::now() - Duration::from_secs(2); // force immediate sample
     let frame_period = Duration::from_millis(16);
 
@@ -98,6 +155,16 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             ui.set_led_color(slint::Color::from_rgb_u8(r, g, b));
         }
     };
+    let save_cfg = |store: &Store, backlight: u32, color_idx: usize, led: &LedDriver| {
+        let cfg = DemoConfig {
+            backlight,
+            color_idx,
+            led_mode: led_mode_to_index(led.mode()),
+        };
+        if let Err(e) = store.save(&cfg) {
+            tracing::warn!(error = %e, "failed to persist demo config");
+        }
+    };
     push_backlight(&ui, backlight);
     update_led_ui(&ui, color_idx, led.mode());
 
@@ -111,9 +178,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // app starts before networking is up, so a one-shot read shows a stale
     // "down" for the device's whole runtime.
 
-    println!("ready; Slint dashboard on /dev/fb0 (Ctrl-C to exit)");
+    tracing::info!("ready; Slint dashboard on /dev/fb0 (Ctrl-C to exit)");
 
-    loop {
+    while !guard.should_shutdown() {
         slint::platform::update_timers_and_animations();
 
         // --- input: drain everything queued, update UI / hardware ---
@@ -125,17 +192,20 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         backlight = (backlight + bl_max / 10).min(bl_max);
                         let _ = set_backlight(BACKLIGHT, backlight);
                         push_backlight(&ui, backlight);
+                        save_cfg(&store, backlight, color_idx, &led);
                     }
                     Button::Down => {
                         backlight = backlight.saturating_sub(bl_max / 10);
                         let _ = set_backlight(BACKLIGHT, backlight);
                         push_backlight(&ui, backlight);
+                        save_cfg(&store, backlight, color_idx, &led);
                     }
                     Button::Enter => {
                         color_idx = (color_idx + 1) % PALETTE.len();
                         let (_, r, g, b) = PALETTE[color_idx];
                         led.set_color((r, g, b));
                         update_led_ui(&ui, color_idx, led.mode());
+                        save_cfg(&store, backlight, color_idx, &led);
                     }
                     Button::F1
                     | Button::F2
@@ -158,42 +228,40 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                             led.set_color((r, g, b));
                         }
                         update_led_ui(&ui, color_idx, led.mode());
+                        save_cfg(&store, backlight, color_idx, &led);
                     }
                     _ => {}
                 }
             }
         }
 
-        // --- metrics: refresh ~1 Hz ---
+        // --- metrics: refresh ~1 Hz via the SDK's aggregated snapshot ---
         if last_metrics.elapsed() >= Duration::from_secs(1) {
             last_metrics = Instant::now();
+            let snap = telemetry.sample();
 
-            if let Some(p) = cpu.sample() {
+            if let Some(p) = snap.cpu_percent {
                 ui.set_cpu_percent(p);
                 ui.set_cpu_text(format!("{p:.0} %").into());
             }
-            if let Ok(s) = std::fs::read_to_string("/proc/meminfo") {
-                if let Some((total, avail)) = parse_meminfo(&s) {
-                    let p = mem_used_percent(total, avail);
-                    ui.set_mem_percent(p);
-                    ui.set_mem_text(format!("{p:.0} %").into());
-                }
+            if let Some(mem) = snap.mem {
+                let p = mem.used_percent();
+                ui.set_mem_percent(p);
+                ui.set_mem_text(format!("{p:.0} %").into());
             }
-            if let Ok(t) = read_temp_c(SOC_THERMAL_ZONE) {
+            if let Some(t) = snap.soc_temp_c {
                 ui.set_temp_c(t);
                 // map ~20..80 °C onto the bar
                 ui.set_temp_percent(((t - 20.0) / 60.0 * 100.0).clamp(0.0, 100.0));
                 ui.set_temp_text(format!("{t:.1}").into()); // unit appended in .slint
             }
-            if let Ok(s) = std::fs::read_to_string("/proc/uptime") {
-                if let Some(secs) = parse_uptime(&s) {
-                    ui.set_uptime(format_uptime(secs).into());
-                }
+            if let Some(secs) = snap.uptime_secs {
+                ui.set_uptime(format_uptime(secs).into());
             }
-            if let Some(bt) = read_board_temp_c() {
+            if let Some(bt) = snap.board_temp_c {
                 ui.set_board_text(format!("Board {bt:.1} °C").into());
             }
-            if let Some(l) = read_loadavg() {
+            if let Some(l) = snap.load1 {
                 ui.set_load_text(format!("load {l:.2}").into());
             }
             ui.set_can_text(format!("CAN {}", read_operstate("can0")).into());
@@ -220,6 +288,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
         sleep(frame_period);
     }
+
+    // `guard` drops here, restoring the pre-launch backlight + LED.
+    tracing::info!("shutting down; restoring panel state");
+    Ok(())
 }
 
 #[cfg(not(target_os = "linux"))]
