@@ -26,6 +26,17 @@ run-example name: (build-example name)
     scp target/{{target}}/release/examples/{{name}} {{user}}@{{host}}:{{appdir}}/
     ssh {{user}}@{{host}} '{{appdir}}/{{name}}'
 
+# Build the Slint dashboard demo (Option B: software renderer, static musl)
+build-slint:
+    cargo zigbuild --release --target {{target}} -p cr1140-slint-demo
+
+# Deploy + run the Slint demo. Stops the autostart app first so the demo gets
+# exclusive ownership of /dev/fb0 (and avoids ETXTBSY overwriting a running bin).
+run-slint: build-slint
+    ssh {{user}}@{{host}} 'systemctl stop cr1140-app.service || true; mkdir -p {{appdir}}'
+    scp target/{{target}}/release/cr1140-slint-demo {{user}}@{{host}}:{{appdir}}/
+    ssh {{user}}@{{host}} '{{appdir}}/cr1140-slint-demo'
+
 # Copy the recon script to the device and run it, capturing output locally
 recon:
     scp cr1140-recon.sh {{user}}@{{host}}:/tmp/

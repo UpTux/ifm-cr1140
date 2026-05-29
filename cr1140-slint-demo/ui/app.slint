@@ -1,0 +1,137 @@
+// CR1140 live-metrics dashboard, rendered by Slint's software renderer into
+// /dev/fb0 via a custom Platform (Option B). Uses only built-in elements
+// (Rectangle / Text / *Layout) so no std-widgets styling dependency is pulled in.
+
+component Metric inherits VerticalLayout {
+    in property <string> label;
+    in property <string> value;
+    in property <float> percent;          // 0..100, drives the bar width
+    in property <color> accent: #33ddaa;
+
+    spacing: 6px;
+
+    HorizontalLayout {
+        Text {
+            text: root.label;
+            color: #9fb3c8;
+            font-size: 17px;
+            horizontal-stretch: 0;
+        }
+        Rectangle { horizontal-stretch: 1; }   // spacer pushes value to the right
+        Text {
+            text: root.value;
+            color: #eef6ff;
+            font-size: 17px;
+            font-weight: 700;
+            horizontal-stretch: 0;
+        }
+    }
+    Rectangle {
+        height: 16px;
+        background: #1b2530;
+        border-radius: 3px;
+        Rectangle {
+            x: 0;
+            y: 0;
+            height: parent.height;
+            width: parent.width * clamp(root.percent / 100, 0.0, 1.0);
+            background: root.accent;
+            border-radius: 3px;
+        }
+    }
+}
+
+export component AppWindow inherits Window {
+    width: 800px;
+    height: 480px;
+    background: #0b0f14;
+
+    in property <float> cpu-percent;
+    in property <string> cpu-text: "—";
+    in property <float> mem-percent;
+    in property <string> mem-text: "—";
+    in property <float> temp-c;
+    in property <float> temp-percent;
+    in property <string> temp-text: "—";
+    in property <int> backlight-percent;
+    in property <string> backlight-text: "—";
+    in property <string> uptime: "—";
+    in property <string> last-key: "—";
+    in property <bool> led-on;
+
+    VerticalLayout {
+        padding: 28px;
+        spacing: 18px;
+
+        Text {
+            text: "CR1140 · Rust + Slint";
+            color: #ddffff;
+            font-size: 27px;
+            font-weight: 800;
+        }
+        Text {
+            text: "software renderer → /dev/fb0 · evdev buttons · sysfs sensors";
+            color: #6b8299;
+            font-size: 13px;
+        }
+
+        Metric {
+            label: "CPU usage";
+            value: root.cpu-text;
+            percent: root.cpu-percent;
+            accent: #33ddaa;
+        }
+        Metric {
+            label: "Memory used";
+            value: root.mem-text;
+            percent: root.mem-percent;
+            accent: #4aa3ff;
+        }
+        Metric {
+            label: "SoC temperature";
+            // Unit lives here (not in the Rust format string) so the "°" glyph
+            // is present in the .slint source and gets embedded by
+            // EmbedForSoftwareRenderer — which only embeds ASCII plus non-ASCII
+            // glyphs it finds literally in the markup.
+            value: root.temp-text + " °C";
+            percent: root.temp-percent;
+            accent: root.temp-c > 70 ? #ff5a5a : (root.temp-c > 55 ? #ffb454 : #33ddaa);
+        }
+        Metric {
+            label: "Backlight";
+            value: root.backlight-text;
+            percent: root.backlight-percent;
+            accent: #c792ea;
+        }
+
+        HorizontalLayout {
+            spacing: 18px;
+            Text {
+                text: "Uptime " + root.uptime;
+                color: #9fb3c8;
+                font-size: 15px;
+                horizontal-stretch: 0;
+            }
+            Rectangle { horizontal-stretch: 1; }
+            Text {
+                text: root.led-on ? "LED ON" : "LED off";
+                color: root.led-on ? #6dff9e : #5a6b7a;
+                font-size: 15px;
+                horizontal-stretch: 0;
+            }
+            Text {
+                text: "Key " + root.last-key;
+                color: #eef6ff;
+                font-size: 15px;
+                horizontal-stretch: 0;
+            }
+        }
+
+        Rectangle { vertical-stretch: 1; }      // push hint to the bottom
+        Text {
+            text: "▲ / ▼ backlight  ·  Enter toggles keypad LED";
+            color: #4a5d70;
+            font-size: 12px;
+        }
+    }
+}
