@@ -1,0 +1,14 @@
+[package]
+name = "cr1140-hal"
+version = "0.1.0"
+edition = "2021"
+description = "Hardware abstraction layer for the ifm CR1140/CR1141 (aarch64, Yocto Linux)"
+
+[dependencies]
+nix = { version = "0.29", features = ["mman", "fs", "poll"] }
+bitflags = "2"
+
+# SocketCAN is Linux-only; building/testing the other modules on a macOS host
+# must still work, so the CAN backend is gated to Linux targets.
+[target.'cfg(target_os = "linux")'.dependencies]
+socketcan = "3"
