@@ -16,4 +16,5 @@ pub mod led;
 pub mod metrics;
 
 pub use error::{SdkError, SdkResult};
+pub use guard::{ShutdownFlag, ShutdownGuard};
 pub use metrics::{MemInfo, Snapshot, Telemetry};
