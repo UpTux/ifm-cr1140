@@ -23,7 +23,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     use cr1140_hal::input::{Button, ButtonEvent, ButtonReader};
     use cr1140_hal::sys::{backlight_max, read_temp_c, set_backlight, set_led};
     use metrics::{
-        format_uptime, mem_used_percent, parse_meminfo, parse_uptime, CpuSampler,
+        format_uptime, hostname, local_ip, mem_used_percent, os_release_value, parse_meminfo,
+        parse_uptime, read_board_temp_c, read_loadavg, read_operstate, CpuSampler,
     };
     use pixel::Xrgb8888;
     use platform::FbPlatform;
@@ -74,6 +75,16 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         ui.set_backlight_text(format!("{pct} %").into());
     };
     push_backlight(&ui, backlight);
+
+    // --- static device identity (read once) ---
+    ui.set_hostname(hostname().into());
+    let osr = std::fs::read_to_string("/etc/os-release").unwrap_or_default();
+    let model = os_release_value(&osr, "PRETTY_NAME").unwrap_or_else(|| "ecomatDisplay".into());
+    let build = os_release_value(&osr, "BUILD_ID").unwrap_or_default();
+    let subtitle = if build.is_empty() { model } else { format!("{model} · build {build}") };
+    ui.set_subtitle(subtitle.into());
+    let eth = local_ip().unwrap_or_else(|| read_operstate("eth0"));
+    ui.set_eth_text(format!("eth0 {eth}").into());
 
     println!("ready; Slint dashboard on /dev/fb0 (Ctrl-C to exit)");
 
@@ -131,6 +142,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     ui.set_uptime(format_uptime(secs).into());
                 }
             }
+            if let Some(bt) = read_board_temp_c() {
+                ui.set_board_text(format!("Board {bt:.1} °C").into());
+            }
+            if let Some(l) = read_loadavg() {
+                ui.set_load_text(format!("load {l:.2}").into());
+            }
+            ui.set_can_text(format!("CAN {}", read_operstate("can0")).into());
         }
 
         // --- render only when dirty, then blit to the framebuffer ---

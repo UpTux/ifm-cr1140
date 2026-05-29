@@ -4,8 +4,9 @@ After=multi-user.target
 
 [Service]
 Type=simple
-ExecStart=/home/cds-apps/demo /dev/input/event1
+ExecStart=/home/cds-apps/cr1140-slint-demo /dev/input/event1
 Restart=on-failure
+RestartSec=2
 
 [Install]
 WantedBy=multi-user.target

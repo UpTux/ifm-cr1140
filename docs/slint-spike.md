@@ -4,9 +4,19 @@
 our HAL instead of hand-rolled pixel loops, while keeping the easy
 **static-musl** toolchain (no libdrm/libinput/libudev/fontconfig).
 
-**Result: works, on-device.** A 1.08 MB *statically linked* aarch64 binary
-renders a live dashboard (CPU, memory, SoC temperature, backlight, uptime) into
-`/dev/fb0`, reads the keypad via evdev, and drives backlight + LED on key press.
+**Result: works, on-device, and is now the autostart app.** A statically linked
+aarch64 binary renders a live dashboard into `/dev/fb0`, reads the keypad via
+evdev, and drives backlight + LED on key press. It runs as `cr1140-app.service`
+(enabled), having replaced the earlier hand-rolled pixel demo.
+
+Real device values on the dashboard (all read from the running device):
+- hostname + firmware/build from `/etc/os-release`
+- CPU% (`/proc/stat`), memory% (`/proc/meminfo`), uptime (`/proc/uptime`),
+  1-min load (`/proc/loadavg`)
+- **SoC temperature** (`thermal_zone0`, cpu-thermal) and a distinct **board
+  temperature** (onboard `lm75` via hwmon)
+- backlight % (sysfs), keypad LED state
+- `eth0` IP (kernel source-address lookup, no extra deps) and `can0` link state
 
 ![dashboard](slint-spike-screenshot.png)
 
@@ -64,9 +74,15 @@ full-frame loop). The HAL remains the non-GUI hardware layer: framebuffer
 ownership, evdev input bridging, sysfs LEDs/backlight, temperature, CAN. That
 split is exactly Option B.
 
+## Autostart
+
+Promoted to `cr1140-app.service` (`deploy/cr1140-app.service` →
+`ExecStart=/home/cds-apps/cr1140-slint-demo`). `app-launcher.service` and
+`codesys.service` stay masked, so the app keeps exclusive `/dev/fb0` ownership
+across reboots. `deploy/install.sh` performs the masking on a fresh device.
+
 ## Not done (out of spike scope)
 
-- Promoting this to the autostart service (still runs the earlier pixel demo).
 - Dispatching evdev keys as Slint key events (we update properties / drive HW
   directly instead — fine for a fixed-function panel).
 - Partial-region blit (we blit the full frame when dirty; cheap at 800×480).

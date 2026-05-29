@@ -46,6 +46,8 @@ export component AppWindow inherits Window {
     height: 480px;
     background: #0b0f14;
 
+    in property <string> hostname: "—";
+    in property <string> subtitle: "—";
     in property <float> cpu-percent;
     in property <string> cpu-text: "—";
     in property <float> mem-percent;
@@ -55,6 +57,10 @@ export component AppWindow inherits Window {
     in property <string> temp-text: "—";
     in property <int> backlight-percent;
     in property <string> backlight-text: "—";
+    in property <string> board-text: "—";
+    in property <string> load-text: "—";
+    in property <string> can-text: "—";
+    in property <string> eth-text: "—";
     in property <string> uptime: "—";
     in property <string> last-key: "—";
     in property <bool> led-on;
@@ -64,13 +70,13 @@ export component AppWindow inherits Window {
         spacing: 18px;
 
         Text {
-            text: "CR1140 · Rust + Slint";
+            text: root.hostname;
             color: #ddffff;
             font-size: 27px;
             font-weight: 800;
         }
         Text {
-            text: "software renderer → /dev/fb0 · evdev buttons · sysfs sensors";
+            text: root.subtitle;
             color: #6b8299;
             font-size: 13px;
         }
@@ -102,6 +108,20 @@ export component AppWindow inherits Window {
             value: root.backlight-text;
             percent: root.backlight-percent;
             accent: #c792ea;
+        }
+
+        HorizontalLayout {
+            spacing: 16px;
+            Text { text: root.board-text; color: #9fb3c8; font-size: 14px; horizontal-stretch: 0; }
+            Rectangle { horizontal-stretch: 1; }
+            Text { text: root.load-text; color: #9fb3c8; font-size: 14px; horizontal-stretch: 0; }
+            Text {
+                text: root.can-text;
+                color: root.can-text == "CAN up" ? #6dff9e : #7d8ea0;
+                font-size: 14px;
+                horizontal-stretch: 0;
+            }
+            Text { text: root.eth-text; color: #9fb3c8; font-size: 14px; horizontal-stretch: 0; }
         }
 
         HorizontalLayout {
