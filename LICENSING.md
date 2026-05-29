@@ -37,7 +37,15 @@ appropriate Slint license from <https://slint.dev>.
 
 ## Contributions
 
-Unless stated otherwise, contributions are accepted under the GPLv3. To keep the
-commercial-licensing option viable, the maintainer may ask contributors to sign a
-Contributor License Agreement (CLA) assigning or licensing their contribution so
-it can be offered under both the GPLv3 and the commercial license.
+To keep the dual-licensing option viable, every contribution must be licensable
+under **both** the GPLv3 and the commercial license. Contributors therefore sign
+a Contributor License Agreement (CLA) before their work is merged:
+
+- Individuals: [`CLA.md`](CLA.md)
+- Contributions owned by an employer / company: [`CLA-CORPORATE.md`](CLA-CORPORATE.md)
+
+The CLA is a **license grant, not a copyright assignment** — you keep ownership of
+your contributions and grant the Maintainer the right to license them under both
+the open-source and commercial terms. (A Developer Certificate of Origin alone is
+**not** sufficient here, because it does not grant the relicensing right the
+commercial option depends on.)
