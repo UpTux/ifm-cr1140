@@ -78,6 +78,7 @@ pub fn read_meminfo() -> Option<(u64, u64)> {
     parse_meminfo(&fs::read_to_string("/proc/meminfo").ok()?)
 }
 
+/// Percentage of memory in use (`0.0..=100.0`); returns `0.0` if `total` is zero.
 pub fn mem_used_percent(total: u64, avail: u64) -> f32 {
     if total == 0 {
         0.0
@@ -260,7 +261,5 @@ mod tests {
         if let Some(p) = first.cpu_percent {
             assert_eq!(p, 0.0);
         }
-        // The struct exposes all six fields; just touch them so the shape is fixed.
-        let _ = (first.mem, first.soc_temp_c, first.board_temp_c, first.uptime_secs, first.load1);
     }
 }
