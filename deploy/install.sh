@@ -13,8 +13,15 @@ echo "Stopping + masking $CODESYS ..."
 systemctl disable --now "$CODESYS" || true
 systemctl mask "$CODESYS" || true
 
-# The splash/launcher also draws to the framebuffer; stop running instances so
-# our app owns /dev/fb0. (Best-effort; names from device-facts.md.)
+# app-launcher.service runs /opt/ifm/app-launcher/run-app.sh, which (with no
+# CODESYS .app present) launches ifm-local-setup — the "setup screen" that also
+# writes /dev/fb0 and would race our app. Mask it and kill any live instance so
+# our app owns the framebuffer. Stock state is enabled+active (restore re-enables).
+echo "Stopping + masking app-launcher.service (frees the framebuffer) ..."
+systemctl disable --now app-launcher.service || true
+systemctl mask app-launcher.service || true
+pkill -f run-app.sh 2>/dev/null || true
+pkill ifm-local-setup 2>/dev/null || true
 systemctl stop 'ifm-ecopanel@*' 2>/dev/null || true
 
 mkdir -p "$APPDIR"

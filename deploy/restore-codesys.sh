@@ -14,5 +14,12 @@ rm -f /etc/systemd/system/cr1140-app.service
 echo "Unmasking $CODESYS (leaving it disabled, per stock state) ..."
 systemctl unmask "$CODESYS" || true
 systemctl disable "$CODESYS" 2>/dev/null || true
+
+# app-launcher.service stock state is enabled + active — re-enable and start it
+# so the ifm setup screen / CODESYS chooser returns.
+echo "Restoring app-launcher.service (stock: enabled+active) ..."
+systemctl unmask app-launcher.service || true
+systemctl enable --now app-launcher.service || true
+
 systemctl daemon-reload
-echo "CODESYS restored to stock (unmasked, disabled); cr1140-app removed."
+echo "CODESYS restored to stock (unmasked, disabled); app-launcher restored; cr1140-app removed."
