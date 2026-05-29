@@ -15,3 +15,4 @@ pub mod led;
 pub mod metrics;
 
 pub use error::{SdkError, SdkResult};
+pub use metrics::{MemInfo, Snapshot, Telemetry};
