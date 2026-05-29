@@ -1,0 +1,10 @@
+.DS_Store
+
+# Large vendor firmware binaries — keep out of git history
+*.swu
+*.package
+*.ext4
+*.ext4.gz
+
+# Build artifacts
+/target
