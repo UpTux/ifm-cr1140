@@ -46,10 +46,12 @@ pub enum ButtonEvent {
     Released(Button),
 }
 
-/// Maps a physical evdev key code to a logical [`Button`].
+/// Maps an evdev key code to a logical [`Button`].
 ///
-/// The codes below are PLACEHOLDERS (standard Linux KEY_* values) and are
-/// replaced with the real device codes captured in Task 3.3.
+/// The `ifm-keypad` (`/dev/input/event1`) emits standard Linux KEY_* codes,
+/// confirmed key-by-key against the live device (Task 3.3): physical F1..F6 =
+/// 59..64, Up=103, Down=108, Left=105, Right=106, Enter=28. Physical labels
+/// match the standard codes 1:1.
 pub fn code_to_button(code: u16) -> Option<Button> {
     match code {
         59 => Some(Button::F1),

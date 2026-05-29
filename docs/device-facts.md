@@ -73,8 +73,11 @@ sections by running `cr1140-recon.sh` on the device (Task 0.2).
 
 - Keypad: **`ifm-keypad` → `/dev/input/event1`** (gpio-keys). (event0 =
   snvs-powerkey, event2 = bd718xx-pwrkey — both ignored.)
-- Physical → keycode map (F1–F6, arrows, Enter): **[live, Task 3.3]** — needs
-  physical button presses to capture.
+- Physical → keycode map **[live ✓, Task 3.3 — confirmed key-by-key]**, all
+  standard Linux KEY_* codes:
+  F1=59, F2=60, F3=61, F4=62, F5=63, F6=64,
+  Up=103, Down=108, Left=105, Right=106, Enter=28.
+  Physical labels match the standard codes 1:1 (`Button::F1` = physical F1, etc.).
 
 ## CAN  [live ✓]
 
