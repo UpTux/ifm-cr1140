@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-only
 //! Minimal Slint `Platform` for Option B: one window, software-rendered, driven
 //! by our own super-loop in `main`. No system event loop, no GPU, no winit.
 

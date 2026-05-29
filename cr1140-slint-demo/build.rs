@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-only
 fn main() {
     // Embed glyphs/resources for the software renderer (no system fonts at
     // runtime — the default font is baked into the binary).

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-only
 //! A `TargetPixel` matching the CR1140 framebuffer layout so Slint's software
 //! renderer can render directly into a buffer we blit to `/dev/fb0` with no
 //! per-pixel format conversion.

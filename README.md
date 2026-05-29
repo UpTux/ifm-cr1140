@@ -74,6 +74,18 @@ sh /tmp/restore-codesys.sh   # bring stock CODESYS back
 Always confirm `restore-codesys.sh` works **before** leaving the device running
 your app. Ultimate fallback: re-flash the stock `.swu` from the delivery.
 
+## Licensing
+
+| Crate | License | Why |
+|-------|---------|-----|
+| `cr1140-slint`, `cr1140-slint-demo` | **GPL-3.0-only** | They link [Slint](https://slint.dev), used here under its GNU GPLv3 option; anything that links it must be GPLv3. Full text in each crate's `LICENSE`. |
+| `cr1140-hal`, `cr1140-sdk` | unset | UI-agnostic — they do **not** link Slint, so they are not bound by its GPL. Pick a license before distributing them separately. |
+
+Shipping a binary that links Slint under GPLv3 means distributing it under GPLv3
+(source available, etc.). For a closed-source product, obtain a Slint
+[commercial/royalty-free license](https://slint.dev) instead and relicense the
+two crates accordingly.
+
 ## Status
 
 Host-side (workspace, toolchain, all module logic, cross-compiled static

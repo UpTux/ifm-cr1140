@@ -3,6 +3,8 @@ name = "cr1140-slint-demo"
 version = "0.1.0"
 edition = "2021"
 publish = false
+# GPLv3: this binary links Slint (via cr1140-slint), used under its GPLv3 option.
+license = "GPL-3.0-only"
 
 [dependencies]
 cr1140-hal = { path = "../cr1140-hal" }     # raw hardware

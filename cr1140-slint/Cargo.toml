@@ -4,6 +4,8 @@ version = "0.1.0"
 edition = "2021"
 publish = false
 description = "Slint integration for the CR1140: a framebuffer-compatible TargetPixel and a minimal software-rendering Platform."
+# GPLv3: this crate links Slint, used here under its GNU GPLv3 option. See LICENSE.
+license = "GPL-3.0-only"
 
 [dependencies]
 # Same no-std-on-Linux feature set as consumers, so feature unification keeps the

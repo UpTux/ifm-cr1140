@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-only
 //! CR1140 dashboard app, built on the layered crates:
 //!   - `cr1140-hal`   — framebuffer, evdev keypad, backlight, SoC temp
 //!   - `cr1140-sdk`   — LED effects (LedDriver), system telemetry, device info

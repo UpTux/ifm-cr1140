@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-only
 //! Slint integration for the CR1140 — the framework-specific glue kept out of
 //! both `cr1140-hal` (hardware) and `cr1140-sdk` (UI-agnostic): a
 //! framebuffer-matching [`Xrgb8888`] `TargetPixel` and a minimal
