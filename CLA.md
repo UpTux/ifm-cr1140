@@ -109,7 +109,7 @@ become aware that would make these representations inaccurate in any respect.
 
 ## 8. Governing Law
 
-This agreement is governed by the laws of **[COUNTRY/STATE — e.g. Germany]**,
+This agreement is governed by the laws of the **Federal Republic of Germany**,
 without regard to its conflict-of-law provisions.
 
 ---

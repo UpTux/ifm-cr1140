@@ -89,7 +89,7 @@ Initial designated contributors (name + GitHub username), or "all employees":
 Contributions are provided **"AS IS", WITHOUT WARRANTIES OR CONDITIONS OF ANY
 KIND**, as in Section 6 of the Individual CLA. The Corporation will notify the
 Maintainer of any facts that would make these representations inaccurate. This
-agreement is governed by the laws of **[COUNTRY/STATE — e.g. Germany]**, without
+agreement is governed by the laws of the **Federal Republic of Germany**, without
 regard to its conflict-of-law provisions.
 
 ---
