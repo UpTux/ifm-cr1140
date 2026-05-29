@@ -9,6 +9,8 @@
 //! - [`metrics`] — generic Linux telemetry (CPU, memory, load, uptime).
 //! - [`device`] — device & OS identity and network state.
 
+#[cfg(feature = "config")]
+pub mod config;
 pub mod device;
 pub mod error;
 pub mod guard;
@@ -16,5 +18,7 @@ pub mod led;
 pub mod metrics;
 
 pub use error::{SdkError, SdkResult};
+#[cfg(feature = "config")]
+pub use config::{Store, DEFAULT_APP_DIR};
 pub use guard::{ShutdownFlag, ShutdownGuard};
 pub use metrics::{MemInfo, Snapshot, Telemetry};
