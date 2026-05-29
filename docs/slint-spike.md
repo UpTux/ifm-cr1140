@@ -45,17 +45,32 @@ Keypad input (live):
   virtual keyboard and watching the green channel ramp 0→249 — the pulse breathe.)
 - **▲ / ▼** adjust the display backlight.
 
-Files (`cr1140-slint-demo/`):
-- `src/pixel.rs` — `Xrgb8888`, implements Slint's `TargetPixel` so the renderer
-  writes the framebuffer's exact byte layout (LE `[B,G,R,X]`); no conversion on blit.
-- `src/led.rs` — keypad-LED animation modes as pure brightness curves over time.
-- `src/platform.rs` — `FbPlatform`: one `MinimalSoftwareWindow`, `duration_since_start`
-  from `std::time::Instant`. No `run_event_loop` — we drive the super-loop ourselves.
-- `src/metrics.rs` — pure `/proc` parsers (CPU%, mem%, uptime) + unit tests.
-- `src/main.rs` — super-loop: `update_timers_and_animations` → drain buttons →
-  refresh metrics ~1 Hz → `draw_if_needed(render)` → blit only when dirty.
-- `ui/app.slint` — dashboard, built-in elements only (no `std-widgets`).
-- `build.rs` — `EmbedForSoftwareRenderer` (embeds glyphs/resources into the binary).
+### Crate layout
+
+The reusable pieces live in layered crates so future apps build on them without
+copy-paste; the demo is just a thin consumer:
+
+- **`cr1140-hal`** — hardware only (display, evdev keypad, CAN, LEDs/backlight,
+  SoC temp). Thin, stable, dependency-light. UI- and policy-free.
+- **`cr1140-sdk`** — app conveniences on top of the HAL, **UI-framework agnostic**:
+  - `led.rs` — `LedMode` brightness curves (pure, unit-tested) + `LedDriver`
+    (owns color/mode/phase; writes sysfs only on change; call `tick()` per frame).
+  - `metrics.rs` — generic Linux telemetry (`/proc`: CPU, mem, load, uptime).
+  - `device.rs` — device/OS identity (os-release, hostname, lm75 board temp) and
+    network (eth/can `operstate`, `iface_ipv4` via `getifaddrs`).
+- **`cr1140-slint`** — Slint integration kept out of HAL and SDK:
+  - `pixel.rs` — `Xrgb8888` `TargetPixel` matching the fb byte layout (LE `[B,G,R,X]`).
+  - `platform.rs` — `FbPlatform`: one `MinimalSoftwareWindow`, `duration_since_start`
+    from `std::time::Instant`. No `run_event_loop` — the app drives the super-loop.
+- **`cr1140-slint-demo`** — the app:
+  - `src/main.rs` — super-loop: `update_timers_and_animations` → drain buttons →
+    refresh metrics ~1 Hz → `led.tick()` → `draw_if_needed(render)` → blit when dirty.
+  - `ui/app.slint` — dashboard, built-in elements only (no `std-widgets`).
+  - `build.rs` — `EmbedForSoftwareRenderer` (embeds glyphs/resources into the binary).
+
+Layering rationale: the HAL stays thin/stable; *policy* (LED animation) and
+*generic telemetry* (CPU/mem) don't belong in a hardware layer; and UI-framework
+glue stays out of both so the SDK is usable from any frontend.
 
 ## Toolchain findings (the whole point of Option B)
 

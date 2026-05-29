@@ -5,8 +5,9 @@ edition = "2021"
 publish = false
 
 [dependencies]
-cr1140-hal = { path = "../cr1140-hal" }
-nix = { version = "0.29", features = ["net"] } # getifaddrs for the eth0 IP
+cr1140-hal = { path = "../cr1140-hal" }     # raw hardware
+cr1140-sdk = { path = "../cr1140-sdk" }     # led effects, telemetry, device info
+cr1140-slint = { path = "../cr1140-slint" } # Slint TargetPixel + Platform glue
 # Slint with NO system backend and NO std-on-Linux font loading. Using the MCU
 # feature set (the same one bare-metal targets use) keeps Slint pure-Rust:
 #   - dropping `std` avoids fontconfig/fontdb system-font loading (the C dep that

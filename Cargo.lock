@@ -750,11 +750,27 @@ dependencies = [
 ]
 
 [[package]]
-name = "cr1140-slint-demo"
+name = "cr1140-sdk"
 version = "0.1.0"
 dependencies = [
  "cr1140-hal",
  "nix 0.29.0",
+]
+
+[[package]]
+name = "cr1140-slint"
+version = "0.1.0"
+dependencies = [
+ "slint",
+]
+
+[[package]]
+name = "cr1140-slint-demo"
+version = "0.1.0"
+dependencies = [
+ "cr1140-hal",
+ "cr1140-sdk",
+ "cr1140-slint",
  "slint",
  "slint-build",
 ]

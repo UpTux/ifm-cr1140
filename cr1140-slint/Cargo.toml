@@ -1,0 +1,16 @@
+[package]
+name = "cr1140-slint"
+version = "0.1.0"
+edition = "2021"
+publish = false
+description = "Slint integration for the CR1140: a framebuffer-compatible TargetPixel and a minimal software-rendering Platform."
+
+[dependencies]
+# Same no-std-on-Linux feature set as consumers, so feature unification keeps the
+# build fontconfig-free and static-musl friendly. See docs/slint-spike.md.
+slint = { version = "1.12", default-features = false, features = [
+    "compat-1-2",
+    "unsafe-single-threaded",
+    "libm",
+    "renderer-software",
+] }

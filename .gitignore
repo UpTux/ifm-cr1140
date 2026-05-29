@@ -8,3 +8,9 @@
 
 # Build artifacts
 /target
+
+# IDE
+.idea/
+
+# Vendor delivery (ifm reference material, large binaries)
+ifm-delivery/

@@ -1,17 +1,19 @@
-//! Keypad-LED animation modes. Each mode is a pure brightness curve over time,
-//! so the render loop can sample `level(t)` every frame and scale the chosen
-//! RGB color by it. Pure → unit-testable on the host.
+//! Keypad-LED animation. Each [`LedMode`] is a pure brightness curve over time;
+//! [`LedDriver`] holds the current color + mode and writes the RGB hardware
+//! (via `cr1140-hal`) only when the computed value changes.
 
+use cr1140_hal::sys::set_kbd_backlight;
 use std::f32::consts::TAU;
+use std::time::Instant;
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum LedMode {
-    Solid,     // F1: always on, full brightness
-    Dim,       // F2: always on, 50%
-    Pulse,     // F3: smooth breathe
-    Blink,     // F4: 1 Hz on/off
-    Flash,     // F5: fast strobe
-    Heartbeat, // F6: double-beat
+    Solid,     // always on, full brightness
+    Dim,       // always on, 50%
+    Pulse,     // smooth breathe
+    Blink,     // 1 Hz on/off
+    Flash,     // fast strobe
+    Heartbeat, // double-beat
 }
 
 impl LedMode {
@@ -67,6 +69,62 @@ pub fn scale(rgb: (u8, u8, u8), level: f32) -> (u8, u8, u8) {
     let l = level.clamp(0.0, 1.0);
     let s = |c: u8| (c as f32 * l).round() as u8;
     (s(rgb.0), s(rgb.1), s(rgb.2))
+}
+
+/// Drives the RGB keypad LED from a base color and an animation mode. Call
+/// [`tick`](LedDriver::tick) once per frame; it samples the mode's brightness
+/// curve, scales the color, and writes the three sysfs channels only when the
+/// resulting value changes (so a steady color costs nothing after the first
+/// write).
+pub struct LedDriver {
+    color: (u8, u8, u8),
+    mode: LedMode,
+    mode_start: Instant,
+    last: Option<(u8, u8, u8)>,
+}
+
+impl LedDriver {
+    /// New driver: off, solid. No hardware write until the first [`tick`](Self::tick).
+    pub fn new() -> Self {
+        Self { color: (0, 0, 0), mode: LedMode::Solid, mode_start: Instant::now(), last: None }
+    }
+
+    /// Set the base color (does not restart the animation phase).
+    pub fn set_color(&mut self, rgb: (u8, u8, u8)) {
+        self.color = rgb;
+    }
+
+    /// Set the animation mode and restart its phase from now.
+    pub fn set_mode(&mut self, mode: LedMode) {
+        self.mode = mode;
+        self.mode_start = Instant::now();
+    }
+
+    pub fn color(&self) -> (u8, u8, u8) {
+        self.color
+    }
+
+    pub fn mode(&self) -> LedMode {
+        self.mode
+    }
+
+    /// Apply the current color×mode to the hardware for this instant. Writes
+    /// sysfs only when the computed channel values differ from the last write.
+    pub fn tick(&mut self) -> std::io::Result<()> {
+        let level = self.mode.level(self.mode_start.elapsed().as_secs_f32());
+        let target = scale(self.color, level);
+        if self.last != Some(target) {
+            set_kbd_backlight(target.0, target.1, target.2)?;
+            self.last = Some(target);
+        }
+        Ok(())
+    }
+}
+
+impl Default for LedDriver {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 #[cfg(test)]
