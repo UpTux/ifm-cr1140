@@ -35,9 +35,20 @@ cr1140_hal::input::ButtonReader (evdev) ──▶ Slint property updates / HAL a
 cr1140_hal::sys + /proc ────────────────▶ live metric values
 ```
 
+Keypad input (live):
+- **Enter** cycles the RGB LED color: off → green → yellow → orange → red → blue.
+- **F1–F6** set the LED animation mode: solid / 50% / pulse / blink / flash /
+  heartbeat. Color × mode are orthogonal; the render loop samples the mode's
+  brightness curve each frame and scales the chosen color, writing the three
+  sysfs channels only when a value changes. (Curves are pure fns in `src/led.rs`,
+  unit-tested. Verified end-to-end on-device by injecting F3 via a uinput
+  virtual keyboard and watching the green channel ramp 0→249 — the pulse breathe.)
+- **▲ / ▼** adjust the display backlight.
+
 Files (`cr1140-slint-demo/`):
 - `src/pixel.rs` — `Xrgb8888`, implements Slint's `TargetPixel` so the renderer
   writes the framebuffer's exact byte layout (LE `[B,G,R,X]`); no conversion on blit.
+- `src/led.rs` — keypad-LED animation modes as pure brightness curves over time.
 - `src/platform.rs` — `FbPlatform`: one `MinimalSoftwareWindow`, `duration_since_start`
   from `std::time::Instant`. No `run_event_loop` — we drive the super-loop ourselves.
 - `src/metrics.rs` — pure `/proc` parsers (CPU%, mem%, uptime) + unit tests.

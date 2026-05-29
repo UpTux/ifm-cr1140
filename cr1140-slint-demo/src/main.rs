@@ -12,6 +12,7 @@
 
 slint::include_modules!();
 
+mod led;
 mod metrics;
 mod pixel;
 #[cfg(target_os = "linux")]
@@ -56,21 +57,25 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Start mid-brightness so the Up/Down demo has headroom in both directions.
     let mut backlight = bl_max / 2;
     let _ = set_backlight(BACKLIGHT, backlight);
+    // Keypad LED state: a base color (Enter cycles PALETTE) × an animation mode
+    // (F1–F6). The render loop samples the mode each frame and scales the color.
     let mut led_idx = 0usize; // start on "off"
+    let mut led_mode = led::LedMode::Solid;
+    let mut mode_start = Instant::now();
+    let mut last_led: Option<(u8, u8, u8)> = None; // only write sysfs on change
     let _ = set_kbd_backlight(0, 0, 0);
 
-    // Push the current palette entry to the keypad LED and the UI (name shown in
-    // the LED's own color; "off" uses a muted gray so the label stays readable).
-    let push_led = |ui: &AppWindow, idx: usize| {
+    // Reflect the current color+mode in the UI (name shown in the LED's own
+    // color; "off" uses a muted gray so the label stays readable).
+    let update_led_ui = |ui: &AppWindow, idx: usize, mode: led::LedMode| {
         let (name, r, g, b) = PALETTE[idx];
-        let _ = set_kbd_backlight(r, g, b);
-        ui.set_led_text(name.into());
-        let swatch = if name == "off" {
-            slint::Color::from_rgb_u8(0x5a, 0x6b, 0x7a)
+        if name == "off" {
+            ui.set_led_text("off".into());
+            ui.set_led_color(slint::Color::from_rgb_u8(0x5a, 0x6b, 0x7a));
         } else {
-            slint::Color::from_rgb_u8(r, g, b)
-        };
-        ui.set_led_color(swatch);
+            ui.set_led_text(format!("{name} · {}", mode.name()).into());
+            ui.set_led_color(slint::Color::from_rgb_u8(r, g, b));
+        }
     };
 
     // --- set up Slint on our custom platform ---
@@ -97,7 +102,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         ui.set_backlight_text(format!("{pct} %").into());
     };
     push_backlight(&ui, backlight);
-    push_led(&ui, led_idx);
+    update_led_ui(&ui, led_idx, led_mode);
 
     // --- static device identity (read once) ---
     ui.set_hostname(hostname().into());
@@ -132,7 +137,28 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     }
                     Button::Enter => {
                         led_idx = (led_idx + 1) % PALETTE.len();
-                        push_led(&ui, led_idx);
+                        update_led_ui(&ui, led_idx, led_mode);
+                    }
+                    Button::F1
+                    | Button::F2
+                    | Button::F3
+                    | Button::F4
+                    | Button::F5
+                    | Button::F6 => {
+                        led_mode = match btn {
+                            Button::F1 => led::LedMode::Solid,
+                            Button::F2 => led::LedMode::Dim,
+                            Button::F3 => led::LedMode::Pulse,
+                            Button::F4 => led::LedMode::Blink,
+                            Button::F5 => led::LedMode::Flash,
+                            _ => led::LedMode::Heartbeat,
+                        };
+                        mode_start = Instant::now(); // restart the animation phase
+                        // A mode is invisible while the color is "off"; light it.
+                        if PALETTE[led_idx].0 == "off" {
+                            led_idx = 1; // green
+                        }
+                        update_led_ui(&ui, led_idx, led_mode);
                     }
                     _ => {}
                 }
@@ -174,6 +200,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             ui.set_can_text(format!("CAN {}", read_operstate("can0")).into());
             let eth = iface_ipv4("eth0").unwrap_or_else(|| read_operstate("eth0"));
             ui.set_eth_text(format!("eth0 {eth}").into());
+        }
+
+        // --- drive the keypad LED animation (every frame; write only on change) ---
+        let (_, br, bg, bb) = PALETTE[led_idx];
+        let level = led_mode.level(mode_start.elapsed().as_secs_f32());
+        let target = led::scale((br, bg, bb), level);
+        if last_led != Some(target) {
+            let _ = set_kbd_backlight(target.0, target.1, target.2);
+            last_led = Some(target);
         }
 
         // --- render only when dirty, then blit to the framebuffer ---
