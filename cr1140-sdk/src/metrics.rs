@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-only
 //! Generic Linux system telemetry from `/proc`. Not CR1140-specific — works on
 //! any Linux host. Pure parsers (host-testable) plus thin procfs readers.
 

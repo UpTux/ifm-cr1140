@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-only
 //! Linux framebuffer (fbdev) backend. The CR1140 runs linuxfb at 800x480,
 //! so `/dev/fb0` is the display path.
 use crate::display::Surface;

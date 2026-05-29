@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-only
 //! System: LEDs, backlight, temperature via sysfs.
 pub mod parse;
 

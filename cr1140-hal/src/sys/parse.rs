@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-only
 /// Parse a sysfs thermal_zone temp file ("42000\n" millidegrees) to °C.
 pub fn parse_millidegrees(s: &str) -> Option<f32> {
     s.trim().parse::<i32>().ok().map(|m| m as f32 / 1000.0)

@@ -4,6 +4,8 @@ version = "0.1.0"
 edition = "2021"
 publish = false
 description = "App-building conveniences on top of cr1140-hal: LED effects, system telemetry, device/network info. UI-framework agnostic."
+# Dual-licensed: GPLv3 for open-source use, or a commercial license — see LICENSING.md.
+license = "GPL-3.0-only"
 
 [dependencies]
 cr1140-hal = { path = "../cr1140-hal" }

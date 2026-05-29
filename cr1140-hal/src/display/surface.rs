@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-only
 /// A mutable view over a packed pixel buffer (xRGB8888, 4 bytes/pixel).
 pub struct Surface<'a> {
     pub buf: &'a mut [u8],

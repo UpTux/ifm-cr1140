@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-only
 //! Front-panel buttons via evdev.
 pub mod event;
 pub use event::{to_button_event, Button, ButtonEvent, InputEvent};

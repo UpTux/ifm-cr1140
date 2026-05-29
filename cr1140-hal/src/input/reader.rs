@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-only
 use crate::error::{HalError, HalResult};
 use crate::input::event::{to_button_event, ButtonEvent, InputEvent};
 use std::fs::{File, OpenOptions};

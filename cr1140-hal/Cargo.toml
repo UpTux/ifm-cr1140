@@ -3,6 +3,8 @@ name = "cr1140-hal"
 version = "0.1.0"
 edition = "2021"
 description = "Hardware abstraction layer for the ifm CR1140/CR1141 (aarch64, Yocto Linux)"
+# Dual-licensed: GPLv3 for open-source use, or a commercial license — see LICENSING.md.
+license = "GPL-3.0-only"
 
 [dependencies]
 nix = { version = "0.29", features = ["mman", "fs", "poll"] }

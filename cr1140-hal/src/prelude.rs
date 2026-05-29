@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-only
 //! Convenience re-exports. `use cr1140_hal::prelude::*;` pulls in the common
 //! types so apps don't need a long list of module-qualified `use` statements.
 

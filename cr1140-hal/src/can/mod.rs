@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-only
 //! CAN access via SocketCAN (Linux-only; the module is empty on other hosts).
 
 #[cfg(target_os = "linux")]

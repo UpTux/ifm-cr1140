@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-only
 //! Unified error type for the HAL. Wraps the OS errors the underlying ABIs
 //! return (`std::io::Error`) and adds HAL-specific failure causes so callers
 //! can distinguish "no such device" from "wrong pixel format" from a plain I/O

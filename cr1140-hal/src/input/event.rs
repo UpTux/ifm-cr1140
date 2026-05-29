@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-only
 pub const EV_KEY: u16 = 1;
 
 /// Raw evdev event (aarch64 layout = 24 bytes: timeval(16) + type(2) + code(2) + value(4)).

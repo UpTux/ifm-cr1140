@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-only
 //! Device & OS identity and network state: things that describe *this* unit
 //! (model/firmware, hostname, onboard board sensor) and its links (eth0/can0).
 

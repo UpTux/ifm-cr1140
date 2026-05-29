@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-only
 //! CR1140 SDK — app-building conveniences layered on top of `cr1140-hal`.
 //!
 //! This crate is deliberately UI-framework agnostic (no Slint, no rendering): it

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-only
 //! Keypad-LED animation. Each [`LedMode`] is a pure brightness curve over time;
 //! [`LedDriver`] holds the current color + mode and writes the RGB hardware
 //! (via `cr1140-hal`) only when the computed value changes.

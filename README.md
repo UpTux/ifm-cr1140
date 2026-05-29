@@ -76,15 +76,19 @@ your app. Ultimate fallback: re-flash the stock `.swu` from the delivery.
 
 ## Licensing
 
+This workspace is **dual-licensed** — free under the GPLv3 for open-source use,
+paid for commercial/closed-source use. Full detail in [`LICENSING.md`](LICENSING.md).
+
 | Crate | License | Why |
 |-------|---------|-----|
-| `cr1140-slint`, `cr1140-slint-demo` | **GPL-3.0-only** | They link [Slint](https://slint.dev), used here under its GNU GPLv3 option; anything that links it must be GPLv3. Full text in each crate's `LICENSE`. |
-| `cr1140-hal`, `cr1140-sdk` | unset | UI-agnostic — they do **not** link Slint, so they are not bound by its GPL. Pick a license before distributing them separately. |
+| `cr1140-hal`, `cr1140-sdk` | **GPLv3 OR commercial** | Free under GPLv3 for open-source projects; for closed-source/commercial use, contact <me@patrickdahlke.com> for a commercial license. |
+| `cr1140-slint`, `cr1140-slint-demo` | **GPL-3.0-only** | They link [Slint](https://slint.dev) under its GNU GPLv3 option; anything that links it must be GPLv3. |
 
-Shipping a binary that links Slint under GPLv3 means distributing it under GPLv3
-(source available, etc.). For a closed-source product, obtain a Slint
-[commercial/royalty-free license](https://slint.dev) instead and relicense the
-two crates accordingly.
+Shipping a binary that links Slint under GPLv3 means distributing it under GPLv3.
+A closed-source product needs **both** a commercial license for these crates
+(from the author) **and** a separate Slint
+[commercial/royalty-free license](https://slint.dev) — they're licensed by
+different parties.
 
 ## Status
 
