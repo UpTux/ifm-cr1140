@@ -26,7 +26,8 @@ struct DemoConfig {
 #[cfg(target_os = "linux")]
 impl Default for DemoConfig {
     fn default() -> Self {
-        // Mid-brightness, LED off, Solid mode — matches the previous hard-coded start.
+        // backlight 0 is a sentinel meaning "use mid-brightness on first run"
+        // (see load below); color_idx 0 = "off"; led_mode 0 = Solid.
         Self { backlight: 0, color_idx: 0, led_mode: 0 }
     }
 }
@@ -44,6 +45,7 @@ fn led_mode_from_index(i: u8) -> cr1140_sdk::led::LedMode {
     }
 }
 
+// Inverse of `led_mode_from_index` — keep the two match tables in sync.
 #[cfg(target_os = "linux")]
 fn led_mode_to_index(m: cr1140_sdk::led::LedMode) -> u8 {
     use cr1140_sdk::led::LedMode;
@@ -108,7 +110,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Load persisted demo settings (or defaults on first run / fresh overlay).
     let store = Store::at(format!("{DEFAULT_APP_DIR}/cr1140-demo.toml"));
-    let cfg: DemoConfig = store.load_or_default().unwrap_or_default();
+    let cfg: DemoConfig = store.load_or_default().unwrap_or_else(|e| {
+        tracing::warn!(error = %e, "failed to load demo config; using defaults");
+        DemoConfig::default()
+    });
     // Start from persisted backlight, or mid-brightness on first run.
     let mut backlight = if cfg.backlight == 0 { bl_max / 2 } else { cfg.backlight.min(bl_max) };
     let _ = set_backlight(BACKLIGHT, backlight);
@@ -155,6 +160,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             ui.set_led_color(slint::Color::from_rgb_u8(r, g, b));
         }
     };
+    // Persist current state. Synchronous (fsync+rename) but bounded: called at
+    // most once per keypress, never per frame.
     let save_cfg = |store: &Store, backlight: u32, color_idx: usize, led: &LedDriver| {
         let cfg = DemoConfig {
             backlight,
