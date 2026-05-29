@@ -65,6 +65,14 @@ sections by running `cr1140-recon.sh` on the device (Task 0.2).
   — mxsfb DRM driver with fbdev emulation; `/dev/dri/card0` also present, DPI-1
   connector). Matches HAL xRGB8888 `Surface` exactly.
 - HAL uses the **fbdev backend**. **DRM backend (plan Task 2.3) SKIPPED.**
+- **No fbdev double-buffering.** `/sys/class/graphics/fb0/virtual_size` =
+  `800,480` (virtual == physical), and on `drmfb` (DRM fbdev emulation)
+  `FBIOPUT_VSCREENINFO` cannot grow `yres_virtual` past 480 — so panning-based
+  double buffering is unavailable. `FbDisplay::open_double_buffered` correctly
+  detects this and falls back to single buffer (`(1 buffer(s))`), confirmed live
+  2026-05-29. Tear-free flipping would need the DRM/KMS path (DUMB buffer +
+  atomic page-flip on `/dev/dri/card0`). The `ifm-local-setup` race is mitigated
+  by continuous full-buffer redraw, not flipping.
 - Backlight: `/sys/class/backlight/backlight/` (`max_brightness=400`).
 - Display fd held by `ifm-local-setup` (a respawning helper, not a systemd
   unit; empty `/proc/PID/cmdline`). It also writes `/dev/fb0`, so it **races**
