@@ -77,7 +77,7 @@ impl ShutdownGuard {
         })
     }
 
-    /// Install the opt-in SIGINT/SIGTERM handler backing [`should_shutdown`].
+    /// Install the opt-in SIGINT/SIGTERM handler backing [`Self::should_shutdown`].
     /// Standalone binaries only — see [`ShutdownFlag::install_handler`].
     #[cfg(feature = "signals")]
     pub fn install_signal_handler(&self) -> crate::SdkResult<()> {
