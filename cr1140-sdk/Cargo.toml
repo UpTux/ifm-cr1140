@@ -2,6 +2,7 @@
 name = "cr1140-sdk"
 version = "0.1.0"
 edition = "2021"
+authors = ["Patrick Dahlke (patdhlk) <me@patrickdahlke.com>"]
 publish = false
 description = "App-building conveniences on top of cr1140-hal: LED effects, system telemetry, device/network info. UI-framework agnostic."
 # Dual-licensed: GPLv3 for open-source use, or a commercial license — see LICENSING.md.

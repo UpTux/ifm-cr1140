@@ -38,8 +38,8 @@ If you want to ship a **closed-source / commercial** product based on this demo,
 GPLv3 is not enough — you need **two** separate commercial licenses, from two
 different parties:
 
-1. A commercial license for `cr1140-hal` / `cr1140-sdk` from the author
-   (Patrick Dahlke, <me@patrickdahlke.com>).
+1. A commercial license for `cr1140-hal` / `cr1140-sdk` from **UpTux UG**
+   (<info@uptux.de>).
 2. A commercial or royalty-free **Slint** license from SixtyFPS GmbH —
    <https://slint.dev>. A commercial license for the CR1140 crates does **not**
    cover Slint.
