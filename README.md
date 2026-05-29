@@ -19,14 +19,16 @@ Design + plan: [`docs/superpowers/specs/`](docs/superpowers/specs/) and
 
 ## What's here
 
-`cr1140-hal` crate with four modules:
+`cr1140-hal` crate. Most fallible calls return `HalResult` (a `HalError` enum —
+`Io`/`DeviceNotFound`/`UnsupportedFormat`/`OutOfRange`/`Parse`, so callers match
+on the cause), and `cr1140_hal::prelude::*` re-exports the common types.
 
 | Module | What it does |
 |--------|--------------|
-| `display` | `Surface` (xRGB8888, stride-aware) + `FbDisplay` (fbdev mmap) |
-| `input`   | `InputEvent` decode + `Button`/`ButtonEvent` mapping + `ButtonReader` |
+| `display` | `Surface` (xRGB8888, stride-aware, `copy_from` blit) + `FbDisplay` (fbdev mmap, format-checked, optional `open_double_buffered`/`present`, `blank`) |
+| `input`   | `InputEvent` decode + `Button`/`ButtonEvent` mapping + `ButtonReader` (`open_keypad*` by-name discovery, `AsFd`/`AsRawFd` for `epoll`) |
 | `can`     | `CanBus` over SocketCAN (open / `send_std` / `recv`) — Linux targets only |
-| `sys`     | `set_led`, `set_backlight`, `read_temp_c`, `backlight_max` |
+| `sys`     | typed `Led` enum + device constants (`BACKLIGHT`, `SOC_THERMAL_ZONE`), `set_led`/`read_led`, `set_backlight`/`read_backlight`, `read_temp_c`, `backlight_max`, `list_*` |
 
 Examples (tracer bullets): `hello`, `hello-fb`, `read-buttons`, `can-echo`,
 `blink-led`, `demo` (all four modules).

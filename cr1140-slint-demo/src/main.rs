@@ -15,7 +15,7 @@ slint::include_modules!();
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     use cr1140_hal::display::FbDisplay;
     use cr1140_hal::input::{Button, ButtonEvent, ButtonReader};
-    use cr1140_hal::sys::{backlight_max, read_temp_c, set_backlight};
+    use cr1140_hal::sys::{backlight_max, read_temp_c, set_backlight, BACKLIGHT, SOC_THERMAL_ZONE};
     use cr1140_sdk::device::{hostname, iface_ipv4, os_release, read_board_temp_c, read_operstate};
     use cr1140_sdk::led::{LedDriver, LedMode};
     use cr1140_sdk::metrics::{
@@ -27,7 +27,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     use std::thread::sleep;
     use std::time::{Duration, Instant};
 
-    const BACKLIGHT: &str = "backlight";
     // Keypad LED colors Enter cycles through: (name, r, g, b).
     const PALETTE: &[(&str, u8, u8, u8)] = &[
         ("off", 0, 0, 0),
@@ -38,13 +37,21 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         ("blue", 0, 0, 255),
     ];
 
-    let event_node = std::env::args().nth(1).unwrap_or_else(|| "/dev/input/event1".into());
-
     // --- open hardware via the HAL ---
-    let mut fb = FbDisplay::open("/dev/fb0")?;
+    // Double-buffer so we own the panel against `ifm-local-setup`, which also
+    // writes /dev/fb0 between our redraws (falls back to single-buffer if the
+    // driver can't grant a second buffer).
+    let mut fb = FbDisplay::open_double_buffered("/dev/fb0")?;
     let (w, h) = (fb.width as usize, fb.height as usize);
-    println!("display {}x{} bpp {} stride {}", fb.width, fb.height, fb.bits_per_pixel, fb.stride);
-    let mut reader = ButtonReader::open_nonblocking(&event_node)?;
+    println!(
+        "display {}x{} bpp {} stride {} ({} buffer(s))",
+        fb.width, fb.height, fb.bits_per_pixel, fb.stride, fb.buffer_count()
+    );
+    // Locate the keypad by name; an explicit event node arg still overrides.
+    let mut reader = match std::env::args().nth(1) {
+        Some(node) => ButtonReader::open_nonblocking(&node)?,
+        None => ButtonReader::open_keypad_nonblocking()?,
+    };
 
     let bl_max = backlight_max(BACKLIGHT).unwrap_or(400).max(1);
     // Start mid-brightness so the Up/Down demo has headroom in both directions.
@@ -171,7 +178,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     ui.set_mem_text(format!("{p:.0} %").into());
                 }
             }
-            if let Ok(t) = read_temp_c(0) {
+            if let Ok(t) = read_temp_c(SOC_THERMAL_ZONE) {
                 ui.set_temp_c(t);
                 // map ~20..80 °C onto the bar
                 ui.set_temp_percent(((t - 20.0) / 60.0 * 100.0).clamp(0.0, 100.0));
@@ -196,32 +203,21 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         // --- drive the keypad LED animation (writes sysfs only on change) ---
         let _ = led.tick();
 
-        // --- render only when dirty, then blit to the framebuffer ---
+        // --- render only when dirty, then blit + flip the framebuffer ---
         let drawn = window.draw_if_needed(|renderer| {
             renderer.render(&mut buf, pixel_stride);
         });
         if drawn {
-            blit(&buf, pixel_stride, &mut fb);
+            // Reinterpret the packed Xrgb8888 render buffer as bytes (same LE
+            // layout as the framebuffer); the HAL's stride-aware `copy_from`
+            // handles the hardware row stride.
+            let src_bytes =
+                unsafe { std::slice::from_raw_parts(buf.as_ptr() as *const u8, buf.len() * 4) };
+            fb.surface().copy_from(src_bytes, (pixel_stride * 4) as u32);
+            let _ = fb.present();
         }
 
         sleep(frame_period);
-    }
-
-    // Copy the render buffer (packed at `pixel_stride`) into the framebuffer,
-    // honouring the hardware row stride. Both sides are little-endian xRGB8888,
-    // so a raw byte copy is correct on aarch64.
-    fn blit(buf: &[Xrgb8888], pixel_stride: usize, fb: &mut FbDisplay) {
-        let w = fb.width as usize;
-        let h = fb.height as usize;
-        let dst_stride = fb.stride as usize;
-        let surf = fb.surface();
-        for y in 0..h {
-            let src = &buf[y * pixel_stride..y * pixel_stride + w];
-            let src_bytes =
-                unsafe { std::slice::from_raw_parts(src.as_ptr() as *const u8, w * 4) };
-            let dst_off = y * dst_stride;
-            surf.buf[dst_off..dst_off + w * 4].copy_from_slice(src_bytes);
-        }
     }
 }
 
