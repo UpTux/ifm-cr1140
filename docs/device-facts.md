@@ -66,8 +66,13 @@ sections by running `cr1140-recon.sh` on the device (Task 0.2).
   connector). Matches HAL xRGB8888 `Surface` exactly.
 - HAL uses the **fbdev backend**. **DRM backend (plan Task 2.3) SKIPPED.**
 - Backlight: `/sys/class/backlight/backlight/` (`max_brightness=400`).
-- Display fd currently held by `ifm-local-setup` (pid 264); no active CODESYS /
-  weston / ecopanel visu.
+- Display fd held by `ifm-local-setup` (a respawning helper, not a systemd
+  unit; empty `/proc/PID/cmdline`). It also writes `/dev/fb0`, so it **races**
+  with a native app that only redraws on demand — it can paint over our output
+  between redraws. For exclusive display ownership: have the app redraw
+  continuously (double-buffer/refresh loop) and/or neutralize `ifm-local-setup`.
+  Verified our writes land and persist (fb read-back matched HAL output);
+  no active CODESYS / weston / ecopanel visu.
 
 ## Input  [live ✓]
 
