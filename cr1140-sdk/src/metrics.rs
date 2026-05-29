@@ -72,6 +72,11 @@ pub fn parse_meminfo(content: &str) -> Option<(u64, u64)> {
     Some((total?, avail?))
 }
 
+/// Read `(MemTotal, MemAvailable)` in kB straight from `/proc/meminfo`.
+pub fn read_meminfo() -> Option<(u64, u64)> {
+    parse_meminfo(&fs::read_to_string("/proc/meminfo").ok()?)
+}
+
 pub fn mem_used_percent(total: u64, avail: u64) -> f32 {
     if total == 0 {
         0.0
@@ -83,6 +88,11 @@ pub fn mem_used_percent(total: u64, avail: u64) -> f32 {
 /// First field of `/proc/uptime` = seconds since boot.
 pub fn parse_uptime(content: &str) -> Option<f64> {
     content.split_whitespace().next()?.parse().ok()
+}
+
+/// Read seconds since boot straight from `/proc/uptime`.
+pub fn read_uptime() -> Option<f64> {
+    parse_uptime(&fs::read_to_string("/proc/uptime").ok()?)
 }
 
 pub fn format_uptime(secs: f64) -> String {
@@ -149,5 +159,22 @@ mod tests {
     fn parse_loadavg_reads_first_field() {
         assert_eq!(parse_loadavg("0.17 0.08 0.08 1/99 12009"), Some(0.17));
         assert_eq!(parse_loadavg(""), None);
+    }
+
+    #[test]
+    fn read_meminfo_shape_is_total_ge_avail_when_present() {
+        // On Linux this reads /proc; on non-Linux hosts it's None. Either is OK,
+        // but if present, total must be >= available.
+        if let Some((total, avail)) = read_meminfo() {
+            assert!(total >= avail, "total {total} < avail {avail}");
+            assert!(total > 0);
+        }
+    }
+
+    #[test]
+    fn read_uptime_is_nonnegative_when_present() {
+        if let Some(secs) = read_uptime() {
+            assert!(secs >= 0.0);
+        }
     }
 }
