@@ -56,7 +56,7 @@ cr1140-hal/        library crate — the HAL
   src/sys/         leds, backlight, temp, persistence, shutdown
   src/lib.rs       Hal facade tying it together
 examples/          tracer bullets (hello-fb, read-buttons, can-echo, blink-led)
-xtask/ or justfile build + deploy helpers (target select, scp, run-on-device)
+justfile           build + deploy helpers (target select, scp, run-on-device)
 docs/              device-facts.md (ground truth), deploy notes
 ```
 
@@ -101,8 +101,8 @@ rustup target add aarch64-unknown-linux-musl aarch64-unknown-linux-gnu
 # default: cargo build --release --target aarch64-unknown-linux-musl
 ```
 
-`.cargo/config.toml` sets linkers; a `justfile`/`xtask` wraps `build → scp →
-run` against the device IP.
+`.cargo/config.toml` sets linkers; a `justfile` wraps `build → scp → run`
+against the device IP.
 
 ## Deploy & CODESYS replacement (reversible)
 
