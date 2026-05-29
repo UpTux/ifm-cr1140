@@ -49,6 +49,8 @@ impl ShutdownFlag {
 
 /// Captures the current backlight + keypad-LED state and restores it on `Drop`.
 pub struct ShutdownGuard {
+    /// Captured backlight node name. Empty means "no hardware captured" (the
+    /// `inert_for_test` guard), in which case `Drop` skips all restore writes.
     backlight_name: String,
     backlight: u32,
     kbd: (u8, u8, u8),
@@ -107,11 +109,13 @@ impl ShutdownGuard {
 impl Drop for ShutdownGuard {
     fn drop(&mut self) {
         // Best-effort restore; never panic in drop. Log failures via tracing so a
-        // host subscriber (if any) sees them.
-        if !self.backlight_name.is_empty() {
-            if let Err(e) = set_backlight(&self.backlight_name, self.backlight) {
-                tracing::warn!(error = %e, "shutdown guard: backlight restore failed");
-            }
+        // host subscriber (if any) sees them. An empty backlight_name marks an
+        // inert guard with no captured hardware — skip both restores together.
+        if self.backlight_name.is_empty() {
+            return;
+        }
+        if let Err(e) = set_backlight(&self.backlight_name, self.backlight) {
+            tracing::warn!(error = %e, "shutdown guard: backlight restore failed");
         }
         let (r, g, b) = self.kbd;
         if let Err(e) = set_kbd_backlight(r, g, b) {
