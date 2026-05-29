@@ -16,7 +16,9 @@ Real device values on the dashboard (all read from the running device):
 - **SoC temperature** (`thermal_zone0`, cpu-thermal) and a distinct **board
   temperature** (onboard `lm75` via hwmon)
 - backlight % (sysfs), keypad LED state
-- `eth0` IP (kernel source-address lookup, no extra deps) and `can0` link state
+- `eth0` IP (via `getifaddrs` — works on an isolated LAN with no default
+  gateway) and `can0` link state. Network fields refresh every tick, since at
+  boot the app starts before networking is up.
 
 ![dashboard](slint-spike-screenshot.png)
 

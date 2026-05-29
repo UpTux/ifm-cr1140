@@ -130,13 +130,20 @@ pub fn hostname() -> String {
         .unwrap_or_else(|_| "?".into())
 }
 
-/// Primary outbound IP, found by asking the kernel which source address it would
-/// use to reach a remote host. UDP `connect` only sets the route — no packets
-/// are sent — so this works offline and needs no extra dependency.
-pub fn local_ip() -> Option<String> {
-    let sock = std::net::UdpSocket::bind("0.0.0.0:0").ok()?;
-    sock.connect("8.8.8.8:80").ok()?;
-    Some(sock.local_addr().ok()?.ip().to_string())
+/// The IPv4 address bound to an interface, read straight from `getifaddrs`.
+/// Unlike a route-based lookup this works on an isolated LAN with no default
+/// gateway (the CR1140's typical deployment).
+pub fn iface_ipv4(iface: &str) -> Option<String> {
+    use nix::ifaddrs::getifaddrs;
+    for ifa in getifaddrs().ok()? {
+        if ifa.interface_name == iface {
+            if let Some(sin) = ifa.address.as_ref().and_then(|a| a.as_sockaddr_in()) {
+                // SockaddrIn renders as "a.b.c.d:port" — drop the port.
+                return Some(sin.to_string().split(':').next()?.to_string());
+            }
+        }
+    }
+    None
 }
 
 #[cfg(test)]

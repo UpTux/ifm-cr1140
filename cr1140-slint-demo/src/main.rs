@@ -23,7 +23,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     use cr1140_hal::input::{Button, ButtonEvent, ButtonReader};
     use cr1140_hal::sys::{backlight_max, read_temp_c, set_backlight, set_led};
     use metrics::{
-        format_uptime, hostname, local_ip, mem_used_percent, os_release_value, parse_meminfo,
+        format_uptime, hostname, iface_ipv4, mem_used_percent, os_release_value, parse_meminfo,
         parse_uptime, read_board_temp_c, read_loadavg, read_operstate, CpuSampler,
     };
     use pixel::Xrgb8888;
@@ -83,8 +83,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let build = os_release_value(&osr, "BUILD_ID").unwrap_or_default();
     let subtitle = if build.is_empty() { model } else { format!("{model} · build {build}") };
     ui.set_subtitle(subtitle.into());
-    let eth = local_ip().unwrap_or_else(|| read_operstate("eth0"));
-    ui.set_eth_text(format!("eth0 {eth}").into());
+    // eth0 IP/state is refreshed in the tick below, not once here: at boot the
+    // app starts before networking is up, so a one-shot read shows a stale
+    // "down" for the device's whole runtime.
 
     println!("ready; Slint dashboard on /dev/fb0 (Ctrl-C to exit)");
 
@@ -149,6 +150,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 ui.set_load_text(format!("load {l:.2}").into());
             }
             ui.set_can_text(format!("CAN {}", read_operstate("can0")).into());
+            let eth = iface_ipv4("eth0").unwrap_or_else(|| read_operstate("eth0"));
+            ui.set_eth_text(format!("eth0 {eth}").into());
         }
 
         // --- render only when dirty, then blit to the framebuffer ---

@@ -754,6 +754,7 @@ name = "cr1140-slint-demo"
 version = "0.1.0"
 dependencies = [
  "cr1140-hal",
+ "nix 0.29.0",
  "slint",
  "slint-build",
 ]
