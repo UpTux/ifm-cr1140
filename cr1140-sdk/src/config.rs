@@ -47,7 +47,17 @@ impl Store {
         let s = toml::to_string(value)?;
         let dir = self.path.parent().unwrap_or_else(|| Path::new("."));
         fs::create_dir_all(dir)?;
-        let tmp = self.path.with_extension("tmp");
+        // Append ".tmp" to the FULL file name (not `with_extension`, which would
+        // collide for "a.toml"/"a.json" and, worse, make tmp == path for a
+        // ".tmp" target — silently defeating atomicity).
+        let tmp = match self.path.file_name() {
+            Some(name) => {
+                let mut name = name.to_os_string();
+                name.push(".tmp");
+                self.path.with_file_name(name)
+            }
+            None => return Err(SdkError::Io(std::io::Error::from(std::io::ErrorKind::InvalidInput))),
+        };
         {
             let mut f = fs::File::create(&tmp)?;
             f.write_all(s.as_bytes())?;
@@ -75,8 +85,7 @@ mod tests {
     }
 
     fn temp_path(tag: &str) -> PathBuf {
-        std::env::temp_dir()
-            .join(format!("cr1140-store-{}-{}-{}.toml", std::process::id(), tag, line!()))
+        std::env::temp_dir().join(format!("cr1140-store-{}-{}.toml", std::process::id(), tag))
     }
 
     #[test]
@@ -115,8 +124,20 @@ mod tests {
         let _ = fs::remove_file(&p);
         let store = Store::at(&p);
         store.save(&Cfg { brightness: 1, label: "x".into() }).unwrap();
-        let tmp = p.with_extension("tmp");
+        let tmp = PathBuf::from(format!("{}.tmp", p.display()));
         assert!(!tmp.exists(), "temp file {tmp:?} should have been renamed away");
+        let _ = fs::remove_file(&p);
+    }
+
+    #[test]
+    fn save_overwrites_previous_value() {
+        let p = temp_path("overwrite");
+        let _ = fs::remove_file(&p);
+        let store = Store::at(&p);
+        store.save(&Cfg { brightness: 10, label: "old".into() }).unwrap();
+        store.save(&Cfg { brightness: 99, label: "new".into() }).unwrap();
+        let back: Cfg = store.load_or_default().unwrap();
+        assert_eq!(back, Cfg { brightness: 99, label: "new".into() });
         let _ = fs::remove_file(&p);
     }
 
