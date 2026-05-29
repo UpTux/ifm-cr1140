@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-only
 //! Unified SDK error type. Mirrors `cr1140_hal::HalError`'s thiserror pattern so
 //! callers — including ROS 2 / Apex nodes — can match on the cause. Metrics
-//! parsers/readers stay `Option`; `led`/`guard`/`config` return [`SdkResult`].
+//! parsers/readers stay `Option`; fallible hardware and config operations return
+//! [`SdkResult`].
 
 /// Errors from fallible SDK operations (hardware restore, config IO).
 #[derive(Debug, thiserror::Error)]
