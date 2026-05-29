@@ -17,8 +17,9 @@ systemctl mask "$CODESYS" || true
 # our app owns /dev/fb0. (Best-effort; names from device-facts.md.)
 systemctl stop 'ifm-ecopanel@*' 2>/dev/null || true
 
-install -d "$APPDIR"
-install -m 0644 /tmp/cr1140-app.service /etc/systemd/system/
+mkdir -p "$APPDIR"
+cp /tmp/cr1140-app.service /etc/systemd/system/cr1140-app.service
+chmod 0644 /etc/systemd/system/cr1140-app.service
 systemctl daemon-reload
 systemctl enable --now cr1140-app.service
 echo "CODESYS masked; cr1140-app enabled."
