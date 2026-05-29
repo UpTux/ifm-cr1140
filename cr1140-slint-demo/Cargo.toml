@@ -25,6 +25,9 @@ slint = { version = "1.12", default-features = false, features = [
     "libm",
     "renderer-software",
 ] }
+tracing = "0.1"
+tracing-subscriber = "0.3"                  # the demo is standalone, so it owns the subscriber
+serde = { version = "1", features = ["derive"] }
 
 [build-dependencies]
 slint-build = "1.12"
