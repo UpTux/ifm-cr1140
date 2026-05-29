@@ -10,5 +10,8 @@
 //! - [`device`] — device & OS identity and network state.
 
 pub mod device;
+pub mod error;
 pub mod led;
 pub mod metrics;
+
+pub use error::{SdkError, SdkResult};
