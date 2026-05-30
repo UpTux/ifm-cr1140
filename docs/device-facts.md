@@ -2,7 +2,7 @@
 
 Ground truth for the HAL. Sources tagged `[offline]` (from the `.swu` rootfs,
 extracted via `debugfs`) or `[live]` (from on-device recon). Fill `[live]`
-sections by running `cr1140-recon.sh` on the device (Task 0.2).
+sections by running `scripts/cr1140-recon.sh` on the device (Task 0.2).
 
 > Do NOT commit the SSH password. Record it in a local note outside git.
 
@@ -114,7 +114,7 @@ sections by running `cr1140-recon.sh` on the device (Task 0.2).
 Settles the conditional capabilities in
 [`../cr1140-hal/CONTEXT.md`](../cr1140-hal/CONTEXT.md) ("Capability scope") and
 [`adr/0001-codesys-fb-capability-scope.md`](adr/0001-codesys-fb-capability-scope.md).
-Recon via `cr1140-cap-recon.sh` (read-only). Re-run command set:
+Recon via `scripts/cr1140-cap-recon.sh` (read-only). Re-run command set:
 
 ```sh
 # buzzer / beeper — EV_SND capability bit, pwm-beeper/gpio-beeper
@@ -152,7 +152,7 @@ systemctl cat ifm-retain-srv.service; ls /sys/bus/nvmem/devices/ /dev/fram* 2>/d
 
 ### nvmem / EEPROM map  [live ✓ — 2026-05-30]
 
-Verified read-only (`cr1140-eeprom-verify.sh` / `-dump.sh`). **Factory data lives on
+Verified read-only (`scripts/cr1140-eeprom-verify.sh` / `-dump.sh`). **Factory data lives on
 the two I²C EEPROMs; the SPI EEPROM is free CODESYS-retain scratch.**
 
 | nvmem device | Bus / size | Contents | Role |

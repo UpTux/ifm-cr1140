@@ -39,5 +39,5 @@ run-slint: build-slint
 
 # Copy the recon script to the device and run it, capturing output locally
 recon:
-    scp cr1140-recon.sh {{user}}@{{host}}:/tmp/
+    scp scripts/cr1140-recon.sh {{user}}@{{host}}:/tmp/
     ssh {{user}}@{{host}} 'sh /tmp/cr1140-recon.sh' 2>&1 | tee docs/recon.txt

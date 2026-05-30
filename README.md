@@ -53,7 +53,7 @@ just test                    # host unit tests (Surface, input decode, sysfs par
 just build-example hello-fb  # cross-build a static aarch64 example
 just verify-example hello-fb # confirm it's a static aarch64 ELF
 just run-example hello-fb    # scp to the device + run  (needs device)
-just recon                   # run cr1140-recon.sh on the device, save docs/recon.txt
+just recon                   # run scripts/cr1140-recon.sh on the device, save docs/recon.txt
 ```
 
 Device address/user/target/appdir are overridable via env:
