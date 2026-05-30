@@ -41,3 +41,19 @@ parser, OR scope v1 to only the high-confidence fields.
 ## Out of scope
 
 - The writable SPI retain EEPROM (issues 01/03).
+
+## Comments
+
+**2026-05-30 — v1 implemented; still `ready-for-human` for live/manual confirmation.**
+`cr1140_hal::sys::FactoryEeprom` added (read-only, over `Nvmem::open_readonly`):
+`open` (the `IDENTITY_EEPROM` const = `/sys/bus/i2c/devices/0-0051/eeprom`) /
+`open_at` / `read_at` (raw escape hatch) / `mac() -> [u8; 6]` at the confirmed
+`MAC_OFFSET = 0xe9`. No write path. Unit-tested against a seeded fake EEPROM
+(`mac()` and raw read agree). Clippy clean.
+
+Still needs a human (kept `ready-for-human`):
+1. Verify `mac()` on the live device returns `00:02:01:ab:bd:49`.
+2. Before adding typed `serial()` / `article()` / `product()` / `built()`, confirm
+   the field offsets/lengths against the **Programming manual CR1140 / CR1141**
+   (currently only the MAC offset is authoritative — see "Why ready-for-human").
+   Until then, use `read_at` for those regions.

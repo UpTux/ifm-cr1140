@@ -1,5 +1,5 @@
 ---
-status: ready-for-agent
+status: done
 ---
 # 01 — HAL `sys::Nvmem` primitive
 
@@ -33,3 +33,15 @@ EEPROM map: [device-facts.md](../../../docs/device-facts.md) "nvmem / EEPROM map
 
 - A/B buffering, CRC, serialization (issue 03).
 - The factory-EEPROM read accessors (issue 02) — separate, depends on this.
+
+## Comments
+
+**2026-05-30 — implemented.** `cr1140_hal::sys::Nvmem` added to `cr1140-hal/src/sys/mod.rs`:
+`open` (RW) / `open_readonly` (RO) / `open_retain` (the known `SPI_RETAIN_EEPROM`
+const = `/sys/bus/spi/devices/spi1.0/eeprom`, keyed on the stable bus path, not the
+nvmem index). API `len` / `is_empty` / `read_at` / `write_at` via positional I/O
+(`FileExt::read_exact_at` / `write_all_at`). Bounds-checked (incl. offset overflow) →
+`HalError::OutOfRange`; missing path → `HalError::DeviceNotFound`; read-only write →
+permission-denied `HalError::Io`. No new deps (std only). 8 unit tests against a
+zero-filled temp-file fake (`std::env::temp_dir`, no `tempfile` dep). `cargo test -p
+cr1140-hal` → 38 passed; clippy clean. Glossary row added to `cr1140-hal/CONTEXT.md`.

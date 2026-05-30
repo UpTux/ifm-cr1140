@@ -1,5 +1,5 @@
 ---
-status: ready-for-agent
+status: done
 ---
 # 03 — SDK `retain::Store<T>` (A/B double-buffer + CRC32)
 
@@ -39,3 +39,23 @@ Depends on: **issue 01** (HAL `sys::Nvmem`).
 
 - `net` module / network apply (issue 04).
 - Multi-region/segmented retain (ADR-0002 records single composed blob; revisit later).
+
+## Comments
+
+**2026-05-30 — implemented.** `cr1140_sdk::retain::Store<T>` added
+(`cr1140-sdk/src/retain.rs`, behind the default `retain` feature; re-exported as
+`RetainStore`). `open` / `load` / `load_or_default` / `save` over HAL `sys::Nvmem`,
+mirroring `config::Store`. Two equal A/B slots framed `[magic "RTNS" | version | seq
+| len | crc32 | payload]` (20-byte header); `save()` writes the inactive slot with a
+bumped `seq`, becoming current only by higher seq **and** valid CRC. CRC-32 (IEEE,
+`0xEDB88320`) is hand-rolled (no dep); serialization is `postcard` (new dep,
+`use-std`). `save()` is write-only-if-changed (reads active slot, no-ops + no seq
+bump on identical payload). Bad magic / unknown version / CRC fail / corrupt length
+all read as "absent" (`Ok(None)`); encode/decode/oversize → new `SdkError::Retain`.
+
+11 unit tests (temp-file fake, no `tempfile` dep): CRC known-vector, round-trip,
+blank→None, slot-alternation + seq bump, unchanged-save no-op, torn-write recovery,
+corrupt-payload→None, unknown-version→absent, oversized→err, too-small-device→err.
+`cargo test -p cr1140-sdk` → 41 passed; clippy clean. `cr1140-sdk/CONTEXT.md` updated
+(`retain::Store` glossary + `config` vs `retain` lifetime contrast). Documented
+low-frequency-only with SNVS LPGPR as the future high-frequency path.
