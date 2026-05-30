@@ -13,7 +13,8 @@ working in that crate; read this map first to find it.
 | HAL         | [`cr1140-hal/CONTEXT.md`](cr1140-hal/CONTEXT.md)               | Thin, typed hardware abstraction over fbdev / evdev / SocketCAN / sysfs |
 | SDK         | [`cr1140-sdk/CONTEXT.md`](cr1140-sdk/CONTEXT.md)               | High-level app framework (run loop, telemetry, config, persistence, shutdown) over the HAL |
 | Slint integ | [`cr1140-slint/CONTEXT.md`](cr1140-slint/CONTEXT.md)           | Slint platform backend wiring the HAL to linuxfb rendering + evdev events |
-| Demo        | [`cr1140-slint-demo/CONTEXT.md`](cr1140-slint-demo/CONTEXT.md) | Reference application built on the SDK + Slint integration |
+| Demo        | [`cr1140-slint-demo/CONTEXT.md`](cr1140-slint-demo/CONTEXT.md) | Reference application built on the SDK + Slint integration (system dashboard) |
+| Baler demo  | [`cr1140-baler-demo/CONTEXT.md`](cr1140-baler-demo/CONTEXT.md) | Second reference app: a round-baler operator panel (retain + CAN + multi-screen UI) |
 
 Dependency direction: `demo → slint + sdk → hal`. The HAL knows nothing about the
 layers above it.

@@ -37,6 +37,17 @@ run-slint: build-slint
     scp target/{{target}}/release/cr1140-slint-demo {{user}}@{{host}}:{{appdir}}/
     ssh {{user}}@{{host}} '{{appdir}}/cr1140-slint-demo'
 
+# Build the round-baler operator-panel demo (Option B: software renderer, static musl)
+build-baler:
+    cargo zigbuild --release --target {{target}} -p cr1140-baler-demo
+
+# Deploy + run the baler demo. Stops the autostart app first so the demo gets
+# exclusive ownership of /dev/fb0 (and avoids ETXTBSY overwriting a running bin).
+run-baler: build-baler
+    ssh {{user}}@{{host}} 'systemctl stop cr1140-app.service || true; mkdir -p {{appdir}}'
+    scp target/{{target}}/release/cr1140-baler-demo {{user}}@{{host}}:{{appdir}}/
+    ssh {{user}}@{{host}} '{{appdir}}/cr1140-baler-demo'
+
 # Copy the recon script to the device and run it, capturing output locally
 recon:
     scp scripts/cr1140-recon.sh {{user}}@{{host}}:/tmp/

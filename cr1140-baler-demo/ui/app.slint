@@ -1,0 +1,380 @@
+// CR1140 round-baler operator panel — light theme, software-rendered into
+// /dev/fb0 via a custom Slint Platform (Option B). Built-in elements only
+// (Rectangle / Text / *Layout) so no std-widgets styling dependency is pulled
+// in, keeping the pure-Rust static aarch64-unknown-linux-musl build.
+
+// One home-menu row: a selectable list entry that highlights when the cursor is
+// on it (Up/Down move the cursor, Enter opens).
+component MenuRow inherits Rectangle {
+    in property <string> label;
+    in property <bool> selected;
+
+    height: 56px;
+    background: root.selected ? #2e7d32 : #ffffff;
+    border-color: root.selected ? #245e27 : #d4dae2;
+    border-width: 1px;
+    border-radius: 6px;
+
+    HorizontalLayout {
+        padding-left: 18px;
+        padding-right: 18px;
+        spacing: 12px;
+        Text {
+            text: root.selected ? "▶" : "";
+            color: #ffffff;
+            font-size: 18px;
+            vertical-alignment: center;
+            horizontal-stretch: 0;
+        }
+        Text {
+            text: root.label;
+            color: root.selected ? #ffffff : #1f2933;
+            font-size: 19px;
+            font-weight: 700;
+            vertical-alignment: center;
+            horizontal-stretch: 1;
+        }
+    }
+}
+
+// A big labelled value card (SESSION / LIFETIME TOTAL on the counter screen).
+component Card inherits Rectangle {
+    in property <string> label;
+    in property <string> value;
+    in property <color> value-color: #1f2933;
+
+    background: #ffffff;
+    border-color: #d4dae2;
+    border-width: 1px;
+    border-radius: 8px;
+
+    VerticalLayout {
+        padding: 16px;
+        spacing: 6px;
+        alignment: center;
+        Text {
+            text: root.label;
+            color: #8a97a6;
+            font-size: 14px;
+            font-weight: 700;
+        }
+        Text {
+            text: root.value;
+            color: root.value-color;
+            font-size: 48px;
+            font-weight: 800;
+        }
+    }
+}
+
+// One cell of the stat strip beneath the counter cards.
+component StatCell inherits VerticalLayout {
+    in property <string> label;
+    in property <string> value;
+
+    horizontal-stretch: 1;
+    spacing: 2px;
+    Text {
+        text: root.label;
+        color: #8a97a6;
+        font-size: 12px;
+        horizontal-alignment: center;
+    }
+    Text {
+        text: root.value;
+        color: #1f2933;
+        font-size: 18px;
+        font-weight: 700;
+        horizontal-alignment: center;
+    }
+}
+
+// One soft-key footer cell: the physical key id (F1..F6) over its current label.
+component SoftKey inherits Rectangle {
+    in property <string> key;
+    in property <string> label;
+
+    background: root.label == "" ? #dfe4ea : #ffffff;
+    border-color: #c3ccd6;
+    border-width: 1px;
+    border-radius: 4px;
+
+    VerticalLayout {
+        padding: 4px;
+        alignment: center;
+        spacing: 1px;
+        Text {
+            text: root.key;
+            color: #8a97a6;
+            font-size: 11px;
+            horizontal-alignment: center;
+        }
+        Text {
+            text: root.label;
+            color: #1f2933;
+            font-size: 14px;
+            font-weight: 700;
+            horizontal-alignment: center;
+            wrap: word-wrap;
+        }
+    }
+}
+
+export component AppWindow inherits Window {
+    width: 800px;
+    height: 480px;
+    background: #e9edf2;
+
+    // --- header chrome (static placeholders set once) + live clock ---
+    in property <string> machine: "CR-BALER 9000";
+    in property <string> field: "North 40";
+    in property <string> status: "READY";
+    in property <string> iso: "ISO";
+    in property <string> clock: "--:--:--";
+
+    // --- body ---
+    // Active screen: 0 = Menu, 1 = Bale Counter, 2 = Knives, 3 = Wrapping.
+    in property <int> screen: 0;
+    in property <int> menu-cursor: 0;
+    // Home-menu labels — set once from the router (its `menu_entries` is the
+    // single source of truth for the menu order).
+    in property <string> menu1: "Bale Counter";
+    in property <string> menu2: "Knives";
+    in property <string> menu3: "Wrapping";
+    in property <string> screen-title: "Baler";
+
+    // --- Bale Counter screen ---
+    in property <string> session-count: "0";
+    in property <string> total-count: "0";
+    in property <string> avg-diameter: "—";
+    in property <string> bales-per-hour: "0";
+    in property <string> net-used: "—";
+    in property <bool> reset-armed: false;
+
+    // --- Knives screen ---
+    in property <bool> knives-in: false;
+
+    // --- Wrapping screen ---
+    in property <bool> wrapping-active: false;
+    in property <float> wrap-progress: 0.0;   // 0..1
+
+    // --- soft-key footer labels (F1..F6) ---
+    in property <string> sk1: "";
+    in property <string> sk2: "";
+    in property <string> sk3: "";
+    in property <string> sk4: "";
+    in property <string> sk5: "";
+    in property <string> sk6: "";
+
+    VerticalLayout {
+        padding: 0px;
+        spacing: 0px;
+
+        // Header bar
+        Rectangle {
+            height: 56px;
+            background: #ffffff;
+            border-color: #d4dae2;
+            border-width: 1px;
+            HorizontalLayout {
+                padding-left: 20px;
+                padding-right: 20px;
+                spacing: 16px;
+                alignment: start;
+
+                VerticalLayout {
+                    alignment: center;
+                    horizontal-stretch: 0;
+                    Text {
+                        text: root.machine;
+                        color: #1f2933;
+                        font-size: 20px;
+                        font-weight: 800;
+                    }
+                }
+                VerticalLayout {
+                    alignment: center;
+                    horizontal-stretch: 0;
+                    Text {
+                        text: "⚲ " + root.field;
+                        color: #5a6b7a;
+                        font-size: 14px;
+                    }
+                }
+                // spacer
+                Rectangle { horizontal-stretch: 1; }
+
+                // READY status pill
+                Rectangle {
+                    horizontal-stretch: 0;
+                    width: ready-label.preferred-width + 24px;
+                    background: #2e7d32;
+                    border-radius: 11px;
+                    ready-label := Text {
+                        text: root.status;
+                        color: #ffffff;
+                        font-size: 13px;
+                        font-weight: 700;
+                        horizontal-alignment: center;
+                        vertical-alignment: center;
+                    }
+                }
+                // ISO badge
+                Rectangle {
+                    horizontal-stretch: 0;
+                    width: iso-label.preferred-width + 18px;
+                    background: #e3e8ee;
+                    border-color: #c3ccd6;
+                    border-width: 1px;
+                    border-radius: 6px;
+                    iso-label := Text {
+                        text: root.iso;
+                        color: #5a6b7a;
+                        font-size: 13px;
+                        font-weight: 700;
+                        horizontal-alignment: center;
+                        vertical-alignment: center;
+                    }
+                }
+                VerticalLayout {
+                    alignment: center;
+                    horizontal-stretch: 0;
+                    Text {
+                        text: root.clock;
+                        color: #1f2933;
+                        font-size: 18px;
+                        font-weight: 700;
+                    }
+                }
+            }
+        }
+
+        // Body — content switches with the active screen.
+        Rectangle {
+            vertical-stretch: 1;
+            background: #e9edf2;
+            VerticalLayout {
+                padding: 24px;
+                spacing: 14px;
+                alignment: start;
+
+                Text {
+                    text: root.screen-title;
+                    color: #1f2933;
+                    font-size: 24px;
+                    font-weight: 800;
+                }
+
+                // Home menu — a selectable list (Up/Down move, Enter opens).
+                if root.screen == 0: VerticalLayout {
+                    spacing: 10px;
+                    MenuRow { label: root.menu1; selected: root.menu-cursor == 0; }
+                    MenuRow { label: root.menu2; selected: root.menu-cursor == 1; }
+                    MenuRow { label: root.menu3; selected: root.menu-cursor == 2; }
+                }
+
+                // Bale Counter (issues 04/05/06)
+                if root.screen == 1: VerticalLayout {
+                    spacing: 14px;
+                    HorizontalLayout {
+                        spacing: 16px;
+                        Card { label: "SESSION"; value: root.session-count; horizontal-stretch: 1; }
+                        Card {
+                            label: "LIFETIME TOTAL";
+                            value: root.total-count;
+                            value-color: #2e7d32;
+                            horizontal-stretch: 1;
+                        }
+                    }
+                    // Stat strip: Avg Ø (mock) · Bales/hr (live) · Net used (mock).
+                    HorizontalLayout {
+                        spacing: 8px;
+                        StatCell { label: "Avg Ø (mock)"; value: root.avg-diameter + " m"; }
+                        StatCell { label: "Bales / hr"; value: root.bales-per-hour; }
+                        StatCell { label: "Net used (mock)"; value: root.net-used + " %"; }
+                    }
+                    // Double-confirm banner for Reset Total (F3).
+                    if root.reset-armed: Rectangle {
+                        height: 40px;
+                        background: #fff3cd;
+                        border-color: #e0a800;
+                        border-width: 1px;
+                        border-radius: 6px;
+                        Text {
+                            text: "⚠  Press F3 again to confirm — reset LIFETIME TOTAL";
+                            color: #8a6d00;
+                            font-size: 15px;
+                            font-weight: 700;
+                            vertical-alignment: center;
+                            horizontal-alignment: center;
+                        }
+                    }
+                }
+
+                // Knives (issue 07)
+                if root.screen == 2: VerticalLayout {
+                    alignment: center;
+                    Rectangle {
+                        height: 200px;
+                        background: root.knives-in ? #2e7d32 : #e3e8ee;
+                        border-color: root.knives-in ? #245e27 : #c3ccd6;
+                        border-width: 2px;
+                        border-radius: 12px;
+                        Text {
+                            text: root.knives-in ? "IN" : "OUT";
+                            color: root.knives-in ? #ffffff : #5a6b7a;
+                            font-size: 96px;
+                            font-weight: 800;
+                            horizontal-alignment: center;
+                            vertical-alignment: center;
+                        }
+                    }
+                }
+
+                // Wrapping (issue 08)
+                if root.screen == 3: VerticalLayout {
+                    spacing: 20px;
+                    alignment: center;
+                    Text {
+                        text: root.wrapping-active ? "WRAPPING" : "IDLE";
+                        color: root.wrapping-active ? #2e7d32 : #5a6b7a;
+                        font-size: 56px;
+                        font-weight: 800;
+                        horizontal-alignment: center;
+                    }
+                    Rectangle {
+                        height: 32px;
+                        background: #ffffff;
+                        border-color: #c3ccd6;
+                        border-width: 1px;
+                        border-radius: 6px;
+                        Rectangle {
+                            x: 0;
+                            y: 0;
+                            height: parent.height;
+                            width: parent.width * clamp(root.wrap-progress, 0.0, 1.0);
+                            background: #2e7d32;
+                            border-radius: 6px;
+                        }
+                    }
+                }
+            }
+        }
+
+        // Soft-key footer — six cells aligned to the F1..F6 keypad row
+        Rectangle {
+            height: 64px;
+            background: #d4dae2;
+            HorizontalLayout {
+                padding: 6px;
+                spacing: 6px;
+                SoftKey { key: "F1"; label: root.sk1; }
+                SoftKey { key: "F2"; label: root.sk2; }
+                SoftKey { key: "F3"; label: root.sk3; }
+                SoftKey { key: "F4"; label: root.sk4; }
+                SoftKey { key: "F5"; label: root.sk5; }
+                SoftKey { key: "F6"; label: root.sk6; }
+            }
+        }
+    }
+}

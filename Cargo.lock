@@ -759,6 +759,20 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7704b5fdd17b18ae31c4c1da5a2e0305a2bf17b5249300a9ee9ed7b72114c636"
 
 [[package]]
+name = "cr1140-baler-demo"
+version = "0.1.0"
+dependencies = [
+ "cr1140-hal",
+ "cr1140-sdk",
+ "cr1140-slint",
+ "serde",
+ "slint",
+ "slint-build",
+ "tracing",
+ "tracing-subscriber",
+]
+
+[[package]]
 name = "cr1140-hal"
 version = "0.1.0"
 dependencies = [
