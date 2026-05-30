@@ -361,19 +361,46 @@ export component AppWindow inherits Window {
             }
         }
 
-        // Soft-key footer — six cells aligned to the F1..F6 keypad row
+        // Soft-key footer — laid out to match the PHYSICAL keypad order
+        // left-to-right: [F6 F4 F2] · [d-pad] · [F1 F3 F5], so each on-screen
+        // label sits over the button that triggers it.
         Rectangle {
             height: 64px;
             background: #d4dae2;
             HorizontalLayout {
                 padding: 6px;
                 spacing: 6px;
-                SoftKey { key: "F1"; label: root.sk1; }
-                SoftKey { key: "F2"; label: root.sk2; }
-                SoftKey { key: "F3"; label: root.sk3; }
-                SoftKey { key: "F4"; label: root.sk4; }
-                SoftKey { key: "F5"; label: root.sk5; }
-                SoftKey { key: "F6"; label: root.sk6; }
+                // Left group of three.
+                SoftKey { key: "F6"; label: root.sk6; horizontal-stretch: 1; }
+                SoftKey { key: "F4"; label: root.sk4; horizontal-stretch: 1; }
+                SoftKey { key: "F2"; label: root.sk2; horizontal-stretch: 1; }
+                // Centre: the up/down/left/right/enter pad.
+                Rectangle {
+                    horizontal-stretch: 1;
+                    background: #c8cfd8;
+                    border-radius: 4px;
+                    VerticalLayout {
+                        padding: 4px;
+                        alignment: center;
+                        spacing: 0px;
+                        Text {
+                            text: "▲ ▼";
+                            color: #5a6b7a;
+                            font-size: 13px;
+                            horizontal-alignment: center;
+                        }
+                        Text {
+                            text: "◀ OK ▶";
+                            color: #5a6b7a;
+                            font-size: 13px;
+                            horizontal-alignment: center;
+                        }
+                    }
+                }
+                // Right group of three.
+                SoftKey { key: "F1"; label: root.sk1; horizontal-stretch: 1; }
+                SoftKey { key: "F3"; label: root.sk3; horizontal-stretch: 1; }
+                SoftKey { key: "F5"; label: root.sk5; horizontal-stretch: 1; }
             }
         }
     }
