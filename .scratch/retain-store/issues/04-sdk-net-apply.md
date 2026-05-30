@@ -1,5 +1,5 @@
 ---
-status: ready-for-agent
+status: ready-for-human
 ---
 # 04 — SDK feature-gated `net` module (`nmcli` apply)
 
@@ -39,3 +39,27 @@ the module itself only needs the `NetworkConfig` type — can be built in parall
 
 - D-Bus (`zbus`) backend — recorded in ADR-0002 as the future upgrade path.
 - Deciding *when* to apply (that's the app's call: boot init and/or UI handler).
+
+## Comments
+
+**2026-05-30 — code complete; moved to `ready-for-human` for the on-device smoke test.**
+`cr1140_sdk::net` added (`cr1140-sdk/src/net.rs`, behind the off-by-default `net`
+feature). `NetworkConfig` (connection / interface / `Method::{Dhcp,Static}` /
+address / prefix / gateway / dns, `Serialize + Deserialize`) + `apply(&NetworkConfig)`.
+`apply` is idempotent: probe `nmcli connection show <name>` → `modify` if it exists
+else `add type ethernet`, append `ipv4.*` (DHCP clears static leftovers; static needs
+address+prefix), then `connection up`. Errors (nmcli missing / non-zero exit / invalid
+config) → new `SdkError::Net` with captured stderr. Logging via the `tracing` facade
+only. The `nmcli` call goes through an injectable `CommandRunner` so unit tests assert
+the argv without shelling out.
+
+Verified AFK:
+- Default build pulls in **no** net code: `cargo build -p cr1140-sdk --no-default-features`
+  → ok; `net` module is `#[cfg(feature = "net")]`.
+- `cargo build/test -p cr1140-sdk --features net` compiles; 7 unit tests (DHCP vs
+  static argv, add-vs-modify, up call, stderr surfaced on failure, serde round-trip)
+  pass; clippy clean. `cr1140-sdk/CONTEXT.md` updated.
+
+**Still needs a human (hardware):** the live smoke test — apply a static IP on-device,
+confirm via `nmcli` / `ip addr`, then re-apply to confirm idempotency. Record the
+result here, then set `status: done`.

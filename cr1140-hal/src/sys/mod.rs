@@ -5,6 +5,7 @@ pub mod parse;
 use crate::error::{HalError, HalResult};
 use crate::sys::parse::{parse_brightness, parse_millidegrees};
 use std::fs;
+use std::os::unix::fs::FileExt as _;
 use std::path::Path;
 
 /// The display backlight node under `/sys/class/backlight/` on the CR1140.
@@ -141,6 +142,173 @@ fn parse_thermal_zone_num(name: &str) -> Option<u32> {
     name.strip_prefix("thermal_zone")?.parse().ok()
 }
 
+/// Stable sysfs path of the writable SPI retain EEPROM (32 KB).
+///
+/// The nvmem *node* is `spi1.00`, but the nvmem index can renumber across
+/// kernels / probe order — so discovery keys on this **stable bus path**, never
+/// on the index. See ADR-0002 and device-facts ("nvmem / EEPROM map").
+pub const SPI_RETAIN_EEPROM: &str = "/sys/bus/spi/devices/spi1.0/eeprom";
+
+/// A thin, typed window onto an nvmem byte device (an EEPROM exposed as a flat
+/// binary attribute under sysfs).
+///
+/// This is *just* typed offset access — no A/B buffering, no CRC, no
+/// serialization. Durability and atomicity are the **caller's** concern; the
+/// SDK's `retain::Store` layers integrity (A/B double-buffer + CRC32) on top.
+///
+/// Bytes are read and written via positional I/O (`pread`/`pwrite`) so a single
+/// `Nvmem` handle can service many offsets without seeking.
+#[derive(Debug)]
+pub struct Nvmem {
+    file: fs::File,
+    len: usize,
+    writable: bool,
+}
+
+impl Nvmem {
+    /// Open an nvmem device for **read and write** at a stable sysfs path.
+    ///
+    /// Use this for the writable SPI retain EEPROM. The length is taken from the
+    /// file's reported size at open time.
+    pub fn open(path: impl AsRef<Path>) -> HalResult<Self> {
+        Self::open_with(path.as_ref(), true)
+    }
+
+    /// Open an nvmem device for **read only** at a stable sysfs path.
+    ///
+    /// Use this for the factory identity EEPROMs, which must never be written. A
+    /// subsequent [`write_at`](Self::write_at) returns a permission-denied
+    /// [`HalError::Io`].
+    pub fn open_readonly(path: impl AsRef<Path>) -> HalResult<Self> {
+        Self::open_with(path.as_ref(), false)
+    }
+
+    /// Open the known writable SPI retain EEPROM ([`SPI_RETAIN_EEPROM`]).
+    pub fn open_retain() -> HalResult<Self> {
+        Self::open(SPI_RETAIN_EEPROM)
+    }
+
+    fn open_with(path: &Path, writable: bool) -> HalResult<Self> {
+        let file = fs::OpenOptions::new()
+            .read(true)
+            .write(writable)
+            .open(path)
+            .map_err(|e| match e.kind() {
+                std::io::ErrorKind::NotFound => {
+                    HalError::DeviceNotFound(format!("nvmem {}: {e}", path.display()))
+                }
+                _ => HalError::Io(e),
+            })?;
+        let len = file.metadata()?.len() as usize;
+        Ok(Nvmem {
+            file,
+            len,
+            writable,
+        })
+    }
+
+    /// Total size of the device in bytes.
+    pub fn len(&self) -> usize {
+        self.len
+    }
+
+    /// Whether the device is empty (zero-length).
+    pub fn is_empty(&self) -> bool {
+        self.len == 0
+    }
+
+    /// Read `buf.len()` bytes starting at `offset`.
+    ///
+    /// Returns [`HalError::OutOfRange`] if `[offset, offset + buf.len())` falls
+    /// outside `[0, len())`; [`HalError::Io`] on a device read failure.
+    pub fn read_at(&self, offset: usize, buf: &mut [u8]) -> HalResult<()> {
+        self.check_range(offset, buf.len())?;
+        self.file
+            .read_exact_at(buf, offset as u64)
+            .map_err(HalError::Io)
+    }
+
+    /// Write `buf` starting at `offset`.
+    ///
+    /// Returns [`HalError::OutOfRange`] if the write would exceed `len()`, a
+    /// permission-denied [`HalError::Io`] if the device was opened read-only, and
+    /// [`HalError::Io`] on a device write failure. Durability/atomicity are the
+    /// caller's concern.
+    pub fn write_at(&self, offset: usize, buf: &[u8]) -> HalResult<()> {
+        if !self.writable {
+            return Err(HalError::Io(std::io::Error::new(
+                std::io::ErrorKind::PermissionDenied,
+                "nvmem opened read-only",
+            )));
+        }
+        self.check_range(offset, buf.len())?;
+        self.file
+            .write_all_at(buf, offset as u64)
+            .map_err(HalError::Io)
+    }
+
+    fn check_range(&self, offset: usize, n: usize) -> HalResult<()> {
+        let end = offset
+            .checked_add(n)
+            .ok_or_else(|| HalError::OutOfRange(format!("offset {offset} + len {n} overflows")))?;
+        if end > self.len {
+            return Err(HalError::OutOfRange(format!(
+                "[{offset}, {end}) exceeds device length {}",
+                self.len
+            )));
+        }
+        Ok(())
+    }
+}
+
+/// Read-only accessor for the device's factory identity EEPROM (I²C `0-0051`).
+///
+/// Exposes the immutable factory identity (MAC, and — best-effort — serial /
+/// article / product) programmed by ifm. This EEPROM survives a firmware reflash
+/// on its own and is **never written** by this crate.
+///
+/// The on-EEPROM format uses an ifm `vhip` magic. Field offsets beyond the MAC
+/// are only partially reverse-engineered from a single dump (see issue 02); only
+/// [`mac`](Self::mac) is offset-confirmed against live hardware. Use
+/// [`read_at`](Self::read_at) for raw access to inferred regions.
+#[derive(Debug)]
+pub struct FactoryEeprom {
+    nvmem: Nvmem,
+}
+
+impl FactoryEeprom {
+    /// Stable sysfs path of the device-identity EEPROM (I²C `0-0051`).
+    pub const IDENTITY_EEPROM: &'static str = "/sys/bus/i2c/devices/0-0051/eeprom";
+
+    /// Offset of the 6-byte binary MAC address. Confirmed against live hardware
+    /// (`00:02:01:ab:bd:49` on the recon unit; see device-facts "nvmem / EEPROM map").
+    pub const MAC_OFFSET: usize = 0xe9;
+
+    /// Open the known device-identity EEPROM ([`IDENTITY_EEPROM`](Self::IDENTITY_EEPROM)).
+    pub fn open() -> HalResult<Self> {
+        Self::open_at(Self::IDENTITY_EEPROM)
+    }
+
+    /// Open a factory identity EEPROM at an explicit sysfs path (read-only).
+    pub fn open_at(path: impl AsRef<Path>) -> HalResult<Self> {
+        Ok(FactoryEeprom {
+            nvmem: Nvmem::open_readonly(path)?,
+        })
+    }
+
+    /// Raw read into `buf` at `offset` — escape hatch for not-yet-typed fields.
+    pub fn read_at(&self, offset: usize, buf: &mut [u8]) -> HalResult<()> {
+        self.nvmem.read_at(offset, buf)
+    }
+
+    /// The factory MAC address as six bytes (offset [`MAC_OFFSET`](Self::MAC_OFFSET)).
+    pub fn mac(&self) -> HalResult<[u8; 6]> {
+        let mut mac = [0u8; 6];
+        self.nvmem.read_at(Self::MAC_OFFSET, &mut mac)?;
+        Ok(mac)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -177,5 +345,100 @@ mod tests {
         names.sort();
         assert_eq!(names, vec!["green:status".to_string(), "red:status".to_string()]);
         let _ = fs::remove_dir_all(&dir);
+    }
+
+    // ---- Nvmem / FactoryEeprom ----
+
+    /// A zero-filled temp file of `size` bytes, standing in for an nvmem device.
+    fn sized_tmp(name: &str, size: usize) -> std::path::PathBuf {
+        let dir = std::env::temp_dir().join(format!("cr1140-hal-nvmem-{}", std::process::id()));
+        fs::create_dir_all(&dir).unwrap();
+        let p = dir.join(name);
+        let f = fs::File::create(&p).unwrap();
+        f.set_len(size as u64).unwrap();
+        p
+    }
+
+    #[test]
+    fn nvmem_reports_len() {
+        let p = sized_tmp("len", 0x8000);
+        let nv = Nvmem::open(&p).unwrap();
+        assert_eq!(nv.len(), 0x8000);
+        assert!(!nv.is_empty());
+    }
+
+    #[test]
+    fn nvmem_round_trip_read_write() {
+        let p = sized_tmp("rw", 256);
+        let nv = Nvmem::open(&p).unwrap();
+        let payload = [0xde, 0xad, 0xbe, 0xef];
+        nv.write_at(16, &payload).unwrap();
+        let mut buf = [0u8; 4];
+        nv.read_at(16, &mut buf).unwrap();
+        assert_eq!(buf, payload);
+        // Bytes outside the written window stay zero.
+        let mut z = [0xffu8; 4];
+        nv.read_at(0, &mut z).unwrap();
+        assert_eq!(z, [0, 0, 0, 0]);
+    }
+
+    #[test]
+    fn nvmem_read_out_of_range_errs() {
+        let p = sized_tmp("ror", 16);
+        let nv = Nvmem::open(&p).unwrap();
+        let mut buf = [0u8; 8];
+        assert!(matches!(nv.read_at(12, &mut buf), Err(HalError::OutOfRange(_))));
+    }
+
+    #[test]
+    fn nvmem_write_out_of_range_errs() {
+        let p = sized_tmp("wor", 16);
+        let nv = Nvmem::open(&p).unwrap();
+        assert!(matches!(nv.write_at(12, &[0u8; 8]), Err(HalError::OutOfRange(_))));
+    }
+
+    #[test]
+    fn nvmem_offset_overflow_errs() {
+        let p = sized_tmp("ovf", 16);
+        let nv = Nvmem::open(&p).unwrap();
+        let mut buf = [0u8; 1];
+        assert!(matches!(
+            nv.read_at(usize::MAX, &mut buf),
+            Err(HalError::OutOfRange(_))
+        ));
+    }
+
+    #[test]
+    fn nvmem_read_only_rejects_write() {
+        let p = sized_tmp("ro", 16);
+        let nv = Nvmem::open_readonly(&p).unwrap();
+        let err = nv.write_at(0, &[1, 2, 3]).unwrap_err();
+        assert!(matches!(err, HalError::Io(_)));
+        // Reads still work.
+        let mut buf = [0u8; 3];
+        nv.read_at(0, &mut buf).unwrap();
+    }
+
+    #[test]
+    fn nvmem_missing_path_is_device_not_found() {
+        let err = Nvmem::open("/nonexistent/nvmem/device").unwrap_err();
+        assert!(matches!(err, HalError::DeviceNotFound(_)));
+    }
+
+    #[test]
+    fn factory_reads_mac_at_confirmed_offset() {
+        let p = sized_tmp("factory", 512);
+        let mac = [0x00, 0x02, 0x01, 0xab, 0xbd, 0x49];
+        // Seed the MAC bytes via a writable handle, then reopen read-only.
+        let w = Nvmem::open(&p).unwrap();
+        w.write_at(FactoryEeprom::MAC_OFFSET, &mac).unwrap();
+        drop(w);
+
+        let eeprom = FactoryEeprom::open_at(&p).unwrap();
+        assert_eq!(eeprom.mac().unwrap(), mac);
+
+        let mut raw = [0u8; 6];
+        eeprom.read_at(FactoryEeprom::MAC_OFFSET, &mut raw).unwrap();
+        assert_eq!(raw, mac);
     }
 }

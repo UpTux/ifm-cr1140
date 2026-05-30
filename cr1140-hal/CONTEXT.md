@@ -22,6 +22,8 @@ Hardware/OS ground truth: [`../docs/device-facts.md`](../docs/device-facts.md).
 | `CanBus`       | SocketCAN wrapper (`open` / `send_std` / `recv`); classic CAN 2.0; Linux-only |
 | `Led` / `set_led` / `read_led` | typed LED control over sysfs |
 | backlight / temp | `set_backlight` / `read_backlight` / `backlight_max`, `read_temp_c` (sysfs) |
+| `sys::Nvmem` | thin typed window onto an nvmem EEPROM (`read_at`/`write_at`/`len`); discovered by stable sysfs path (`SPI_RETAIN_EEPROM`), no integrity policy — the SDK `retain::Store` layers A/B + CRC on top |
+| `sys::FactoryEeprom` | read-only accessor for the I²C device-identity EEPROM (`0-0051`); `mac()` is offset-confirmed, other fields are raw/best-effort. Never written |
 | `HalError` / `HalResult` | error enum (`Io`/`DeviceNotFound`/`UnsupportedFormat`/`OutOfRange`/`Parse`) and result alias |
 | `prelude`      | `cr1140_hal::prelude::*` re-export of common types |
 

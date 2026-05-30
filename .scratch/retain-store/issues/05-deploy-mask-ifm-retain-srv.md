@@ -1,5 +1,5 @@
 ---
-status: ready-for-agent
+status: done
 ---
 # 05 — Deploy: mask / unmask `ifm-retain-srv`
 
@@ -31,3 +31,16 @@ meaningless without the CODESYS runtime (already masked).
 
 - The EEPROM read/write code (issues 01/03).
 - Migrating any existing CODESYS retain data (intentionally discarded — see ADR-0002).
+
+## Comments
+
+**2026-05-30 — implemented.** `deploy/install.sh` now runs
+`systemctl mask --now ifm-retain-srv || true` right after the `codesys.service`
+masking block (before `cr1140-app` is enabled/started, so the daemon can't race our
+first EEPROM write). `deploy/restore-codesys.sh` now runs
+`systemctl unmask ifm-retain-srv || true` + `systemctl enable --now ifm-retain-srv
+2>/dev/null || true` next to the `codesys.service` unmask block (stock state is
+enabled+active; it reinitializes its segments on the next CODESYS run). Both guarded
+with `|| true` like the surrounding units → idempotent and non-fatal. `sh -n` clean
+on both scripts. The on-device `systemctl is-enabled/is-active` assertions need a
+device to confirm but follow directly from the masking commands.

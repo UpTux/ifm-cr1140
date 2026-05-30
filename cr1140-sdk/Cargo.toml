@@ -15,9 +15,15 @@ tracing = "0.1"                                # facade only; no subscriber in t
 thiserror = "2"                                # matches cr1140-hal's major
 serde = { version = "1", features = ["derive"], optional = true }
 toml = { version = "0.9", optional = true }
+postcard = { version = "1", features = ["use-std"], optional = true } # compact binary serde for retain
 signal-hook = { version = "0.3", optional = true }
 
 [features]
-default = ["config", "signals"]
+default = ["config", "signals", "retain"]
 config = ["dep:serde", "dep:toml"]
+# Reflash-surviving persistence on the SPI EEPROM (A/B + CRC32, postcard).
+retain = ["dep:serde", "dep:postcard"]
+# Host network-config apply via `nmcli` (NetworkManager). Off by default: keeps
+# host assumptions out of the guest-minimal build (ADR-0002, "SDK is a guest").
+net = ["dep:serde"]
 signals = ["dep:signal-hook"]

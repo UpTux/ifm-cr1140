@@ -21,6 +21,16 @@ pub enum SdkError {
     #[cfg(feature = "config")]
     #[error("config encode: {0}")]
     Encode(#[from] toml::ser::Error),
+    /// A retain-store framing/integrity error (bad magic, CRC mismatch, payload
+    /// too large, or `postcard` (de)serialization failure).
+    #[cfg(feature = "retain")]
+    #[error("retain: {0}")]
+    Retain(String),
+    /// A network-apply error: `nmcli` missing, a non-zero exit (with captured
+    /// stderr), or an invalid [`crate::net::NetworkConfig`].
+    #[cfg(feature = "net")]
+    #[error("net: {0}")]
+    Net(String),
 }
 
 /// Result alias for SDK operations.

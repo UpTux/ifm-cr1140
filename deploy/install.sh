@@ -13,6 +13,13 @@ echo "Stopping + masking $CODESYS ..."
 systemctl disable --now "$CODESYS" || true
 systemctl mask "$CODESYS" || true
 
+# ifm-retain-srv owns the SPI EEPROM we now use as our retain store (it writes 3
+# CODESYS-retain segments to spi1.0/eeprom). Mask it BEFORE our app first writes
+# the EEPROM so the daemon can't race our writes. Meaningless without CODESYS;
+# restore-codesys.sh unmasks it. See ADR-0002.
+echo "Stopping + masking ifm-retain-srv (frees the SPI retain EEPROM) ..."
+systemctl mask --now ifm-retain-srv || true
+
 # app-launcher.service runs /opt/ifm/app-launcher/run-app.sh, which (with no
 # CODESYS .app present) launches ifm-local-setup — the "setup screen" that also
 # writes /dev/fb0 and would race our app. Mask it and kill any live instance so

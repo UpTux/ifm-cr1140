@@ -15,6 +15,13 @@ echo "Unmasking $CODESYS (leaving it disabled, per stock state) ..."
 systemctl unmask "$CODESYS" || true
 systemctl disable "$CODESYS" 2>/dev/null || true
 
+# ifm-retain-srv stock state is enabled + active; it reinitializes its EEPROM
+# segments from CODESYS RAM on the next CODESYS run. Unmask + restart so stock
+# restore is clean. See ADR-0002.
+echo "Restoring ifm-retain-srv (stock: enabled+active) ..."
+systemctl unmask ifm-retain-srv || true
+systemctl enable --now ifm-retain-srv 2>/dev/null || true
+
 # app-launcher.service stock state is enabled + active — re-enable and start it
 # so the ifm setup screen / CODESYS chooser returns.
 echo "Restoring app-launcher.service (stock: enabled+active) ..."

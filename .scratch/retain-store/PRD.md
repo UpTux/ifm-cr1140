@@ -18,11 +18,11 @@ on the I²C EEPROMs).
 
 | # | Title | Status | Depends on |
 |---|-------|--------|------------|
-| 01 | HAL `sys::Nvmem` primitive | ready-for-agent | — |
-| 02 | HAL read-only factory-EEPROM accessors | ready-for-human | 01 |
-| 03 | SDK `retain::Store<T>` (A/B + CRC32) | ready-for-agent | 01 |
-| 04 | SDK feature-gated `net` module (`nmcli` apply) | ready-for-agent | 03 (integration only) |
-| 05 | Deploy: mask/unmask `ifm-retain-srv` | ready-for-agent | — |
+| 01 | HAL `sys::Nvmem` primitive | done | — |
+| 02 | HAL read-only factory-EEPROM accessors | ready-for-human (v1 coded; live/manual verify pending) | 01 |
+| 03 | SDK `retain::Store<T>` (A/B + CRC32) | done | 01 |
+| 04 | SDK feature-gated `net` module (`nmcli` apply) | ready-for-human (coded; on-device smoke pending) | 03 (integration only) |
+| 05 | Deploy: mask/unmask `ifm-retain-srv` | done | — |
 
 Workload target is **power-safe low-frequency settings** — no high-frequency retain on
 the EEPROM (route any future high-frequency need to SNVS LPGPR instead).
