@@ -109,6 +109,91 @@ sections by running `cr1140-recon.sh` on the device (Task 0.2).
   - `mmc0::` (activity).
 - For a visible brightness ramp use a `*:kbd_backlight`; status LEDs are on/off.
 
+## Capability recon (CODESYS FB checklist)  [live ✓ — 2026-05-30]
+
+Settles the conditional capabilities in
+[`../cr1140-hal/CONTEXT.md`](../cr1140-hal/CONTEXT.md) ("Capability scope") and
+[`adr/0001-codesys-fb-capability-scope.md`](adr/0001-codesys-fb-capability-scope.md).
+Recon via `cr1140-cap-recon.sh` (read-only). Re-run command set:
+
+```sh
+# buzzer / beeper — EV_SND capability bit, pwm-beeper/gpio-beeper
+cat /proc/bus/input/devices
+ls /sys/class/ | grep -i beep; dmesg | grep -i 'beep\|buzzer'
+# hardware watchdog — which owner is free (imx2-wdt expected)
+ls -l /dev/watchdog*; grep -i watchdog /etc/systemd/system.conf; dmesg | grep -i wdt
+# ambient-light sensor — IIO illuminance channel (prior: absent)
+ls /sys/bus/iio/devices/ 2>/dev/null; dmesg | grep -iE 'illuminance|als|light-sensor'
+# retain — nvmem inventory + what ifm-retain-srv persists and where
+systemctl cat ifm-retain-srv.service; ls /sys/bus/nvmem/devices/ /dev/fram* 2>/dev/null
+```
+
+- **Buzzer: ABSENT → dropped.** `ifm-keypad` reports `EV=0x100003` (SYN + KEY + REP
+  only); the `EV_SND` bit (`0x12`) is not set. No `pwm-beeper`/`gpio-beeper` in sysfs
+  or dmesg, no separate beeper input node. No buzzer exposed via any standard kernel
+  interface on this SKU.
+- **Watchdog: PRESENT + unclaimed → in scope.** `/dev/watchdog` (10,130) and
+  `/dev/watchdog0` (248,0), `imx2-wdt`. `system.conf` has `#RuntimeWatchdogSec=off`
+  (commented → systemd is **not** petting it), so the HW watchdog is free for either
+  owner. Plan stands: systemd-owned by default (`RuntimeWatchdogSec` + a
+  `Type=notify`/`WatchdogSec=` unit), opt-in `/dev/watchdog` HAL primitive for
+  app-owned liveness.
+- **Ambient light: ABSENT → dropped.** `/sys/bus/iio/devices/` empty; no illuminance
+  channel; nothing in dmesg.
+- **Retain: PRESENT as real NV hardware → reopened (see below).** Not a file daemon:
+  `ifm-retain-srv` persists three segments to an **SPI EEPROM** —
+  `ExecStart=/usr/bin/ifm-retain-srv -s 1 0 8104 -s 2 16384 232 -s 3 16880 7936
+  /sys/bus/spi/devices/spi1.0/eeprom` (exposed as nvmem `spi1.00`). Additional
+  battery/EEPROM-backed NV present: **RV-3028 RTC** with NVRAM + EEPROM
+  (`rv3028_nvram0`, `rv3028_eeprom0`), i.MX **SNVS low-power GP registers**
+  (`snvs-lpgpr0`, coin-cell-backed scratch), two I²C EEPROMs (`0-0050*`), and
+  `imx-ocotp0` (read-only fuses). The RV-3028 is also the system RTC (OS owns
+  wall-clock via `/dev/rtc` — RTC stays out of scope; only its NVRAM is retain-relevant).
+
+### nvmem / EEPROM map  [live ✓ — 2026-05-30]
+
+Verified read-only (`cr1140-eeprom-verify.sh` / `-dump.sh`). **Factory data lives on
+the two I²C EEPROMs; the SPI EEPROM is free CODESYS-retain scratch.**
+
+| nvmem device | Bus / size | Contents | Role |
+|--------------|-----------|----------|------|
+| `spi1.00`       | SPI `spi1.0`, **32 KB** | CODESYS retain blobs (`92 19 a8 1f…` then zeros), **no factory data, no MAC** | **free — our retain target** |
+| `0-00513`       | I²C 0x51, 16 KB | `vhip` magic, article `100008599862`, `CR1140`, `ecomatDisplay/4.3"/STD./E`, asset `pdm3_4_001`, serial `7998407`, date `28.03.2025`, **MAC `00:02:01:ab:bd:49`** | factory device identity — **read-only** |
+| `0-00502`       | I²C 0x50, 16 KB | `adm-icn6211-9904454_Modul1-notouch-v1.0` (ICN6211 DSI bridge; `notouch` ⇒ keypad-only SKU) | factory panel/board info — **read-only** |
+| `rv3028_eeprom0`| RTC, 43 B | RV-3028 config EEPROM | RTC-owned |
+| `rv3028_nvram0` | RTC, 2 B  | RV-3028 user NVRAM | tiny scratch |
+| `snvs-lpgpr0`   | SoC, 16 B | i.MX SNVS low-power GP regs (coin-cell-backed SRAM) | tiny fast retain |
+| `imx-ocotp0`    | SoC, 1 KB | OCOTP fuses (MAC not shadowed here) | read-only |
+
+**Retain decision (settled by recon):** own the **SPI EEPROM (`spi1.00`, 32 KB)** for a
+reflash-surviving retain store (factory calibration / network config). `mask
+ifm-retain-srv` (currently `active`) alongside `codesys.service`; restore-to-stock
+unmasks it. Factory identity (serial/MAC/article) is **read-only** on the I²C EEPROMs and
+needs no write path. Remaining design (on-EEPROM layout/integrity, HAL-vs-SDK API,
+`.swu` reflash-survival verification) tracked in the HAL CONTEXT scope table.
+
+## Firmware update (`.swu`) — what survives a reflash  [offline ✓ — 2026-05-30]
+
+From the delivery `sw-description` (`ifm_ecomatDisplay43inch_cds_2.0.0.11.swu`,
+extracted via `cpio`). The package carries **one image** (the p1 rootfs,
+`core-image-…ext4.gz` → `/dev/mmcblk0p1`, raw) plus an `emmc_part` Lua embedded
+script. Reflash behavior:
+
+- **p1** (rootfs): overwritten with the new image.
+- **p2** (overlay — `/home/cds-apps`, `/etc`, our writes): **`mkfs.ext4 -F`'d on every
+  update**, *including* the "partition table already correct" fast path. **Always wiped.**
+- **p3** (`/mnt/updata`): survives the fast path, but is **`mkfs.ext4 -F`'d when the
+  partition table changes** (the script's whole purpose). **Not a guaranteed survivor.**
+- **EEPROMs** (SPI `spi1.00`, I²C `0-0050*`) and U-Boot env: **not touched** by the update.
+- U-Boot env vars are *set* by `bootenv` (`bootdelay`, `bootargs=init=/sbin/ifm-overlay.sh`,
+  `ifm_boot_status_led`, `fw_version`, …) but the EEPROMs are untouched.
+
+**Consequence for persistence:** the **SPI EEPROM is the only writable storage that
+survives every update.** `config::Store` on p2 does **not** survive a reflash; data that
+must (factory calibration, network/IP config) belongs in the EEPROM retain store. Live
+network config under `/etc` (p2) is wiped on update → must be re-applied on boot from
+retain.
+
 ## Recovery & restore  [live ✓ — Task 0.3]
 
 - **Stock state of `codesys.service`: `disabled` + `inactive`** (fresh delivery,
