@@ -9,7 +9,7 @@ component MenuRow inherits Rectangle {
     in property <string> label;
     in property <bool> selected;
 
-    height: 56px;
+    height: 46px;
     background: root.selected ? #2e7d32 : #ffffff;
     border-color: root.selected ? #245e27 : #d4dae2;
     border-width: 1px;
@@ -89,6 +89,40 @@ component StatCell inherits VerticalLayout {
     }
 }
 
+// A label-left / value-right info row (telemetry metrics).
+component InfoRow inherits Rectangle {
+    in property <string> label;
+    in property <string> value;
+
+    horizontal-stretch: 1;
+    height: 44px;
+    background: #ffffff;
+    border-color: #d4dae2;
+    border-width: 1px;
+    border-radius: 6px;
+
+    HorizontalLayout {
+        padding-left: 12px;
+        padding-right: 12px;
+        spacing: 8px;
+        Text {
+            text: root.label;
+            color: #8a97a6;
+            font-size: 15px;
+            vertical-alignment: center;
+            horizontal-stretch: 1;
+        }
+        Text {
+            text: root.value;
+            color: #1f2933;
+            font-size: 18px;
+            font-weight: 700;
+            vertical-alignment: center;
+            horizontal-stretch: 0;
+        }
+    }
+}
+
 // One soft-key footer cell: the physical key id (F1..F6) over its current label.
 component SoftKey inherits Rectangle {
     in property <string> key;
@@ -133,17 +167,20 @@ export component AppWindow inherits Window {
     in property <string> clock: "--:--:--";
 
     // --- body ---
-    // Active screen: 0 = Menu, 1 = Bale Counter, 2 = Knives, 3 = Wrapping.
+    // Active screen: 0 Menu · 1 Dashboard · 2 Bale Counter · 3 Knives ·
+    // 4 Wrapping · 5 Telemetry.
     in property <int> screen: 0;
     in property <int> menu-cursor: 0;
     // Home-menu labels — set once from the router (its `menu_entries` is the
     // single source of truth for the menu order).
-    in property <string> menu1: "Bale Counter";
-    in property <string> menu2: "Knives";
-    in property <string> menu3: "Wrapping";
+    in property <string> menu1: "Dashboard";
+    in property <string> menu2: "Bale Counter";
+    in property <string> menu3: "Knives";
+    in property <string> menu4: "Wrapping";
+    in property <string> menu5: "Telemetry";
     in property <string> screen-title: "Baler";
 
-    // --- Bale Counter screen ---
+    // --- Bale Counter / Dashboard (shared counter + wrapping state) ---
     in property <string> session-count: "0";
     in property <string> total-count: "0";
     in property <string> avg-diameter: "—";
@@ -154,9 +191,18 @@ export component AppWindow inherits Window {
     // --- Knives screen ---
     in property <bool> knives-in: false;
 
-    // --- Wrapping screen ---
+    // --- Wrapping screen / Dashboard ---
     in property <bool> wrapping-active: false;
     in property <float> wrap-progress: 0.0;   // 0..1
+
+    // --- Telemetry screen ---
+    in property <string> tele-cpu: "—";
+    in property <string> tele-mem: "—";
+    in property <string> tele-temp: "—";
+    in property <string> tele-uptime: "—";
+    in property <string> tele-net: "—";
+    in property <string> backlight-text: "—";
+    in property <int> backlight-percent: 0;
 
     // --- soft-key footer labels (F1..F6) ---
     in property <string> sk1: "";
@@ -267,14 +313,80 @@ export component AppWindow inherits Window {
 
                 // Home menu — a selectable list (Up/Down move, Enter opens).
                 if root.screen == 0: VerticalLayout {
-                    spacing: 10px;
+                    spacing: 8px;
                     MenuRow { label: root.menu1; selected: root.menu-cursor == 0; }
                     MenuRow { label: root.menu2; selected: root.menu-cursor == 1; }
                     MenuRow { label: root.menu3; selected: root.menu-cursor == 2; }
+                    MenuRow { label: root.menu4; selected: root.menu-cursor == 3; }
+                    MenuRow { label: root.menu5; selected: root.menu-cursor == 4; }
+                }
+
+                // Dashboard — bale counter + wrapping control on one screen.
+                if root.screen == 1: VerticalLayout {
+                    spacing: 12px;
+                    HorizontalLayout {
+                        spacing: 16px;
+                        Card { label: "SESSION"; value: root.session-count; horizontal-stretch: 1; }
+                        Card {
+                            label: "LIFETIME TOTAL";
+                            value: root.total-count;
+                            value-color: #2e7d32;
+                            horizontal-stretch: 1;
+                        }
+                    }
+                    HorizontalLayout {
+                        spacing: 8px;
+                        StatCell { label: "Avg Ø (mock)"; value: root.avg-diameter + " m"; }
+                        StatCell { label: "Bales / hr"; value: root.bales-per-hour; }
+                        StatCell { label: "Net used (mock)"; value: root.net-used + " %"; }
+                    }
+                    // Inline wrapping control: state label + progress bar.
+                    HorizontalLayout {
+                        spacing: 12px;
+                        Text {
+                            text: root.wrapping-active ? "WRAPPING" : "IDLE";
+                            color: root.wrapping-active ? #2e7d32 : #8a97a6;
+                            font-size: 22px;
+                            font-weight: 800;
+                            vertical-alignment: center;
+                            horizontal-stretch: 0;
+                        }
+                        Rectangle {
+                            horizontal-stretch: 1;
+                            height: 26px;
+                            background: #ffffff;
+                            border-color: #c3ccd6;
+                            border-width: 1px;
+                            border-radius: 6px;
+                            Rectangle {
+                                x: 0;
+                                y: 0;
+                                height: parent.height;
+                                width: parent.width * clamp(root.wrap-progress, 0.0, 1.0);
+                                background: #2e7d32;
+                                border-radius: 6px;
+                            }
+                        }
+                    }
+                    if root.reset-armed: Rectangle {
+                        height: 36px;
+                        background: #fff3cd;
+                        border-color: #e0a800;
+                        border-width: 1px;
+                        border-radius: 6px;
+                        Text {
+                            text: "⚠  Press F4 again to confirm — reset LIFETIME TOTAL";
+                            color: #8a6d00;
+                            font-size: 14px;
+                            font-weight: 700;
+                            vertical-alignment: center;
+                            horizontal-alignment: center;
+                        }
+                    }
                 }
 
                 // Bale Counter (issues 04/05/06)
-                if root.screen == 1: VerticalLayout {
+                if root.screen == 2: VerticalLayout {
                     spacing: 14px;
                     HorizontalLayout {
                         spacing: 16px;
@@ -312,7 +424,7 @@ export component AppWindow inherits Window {
                 }
 
                 // Knives (issue 07)
-                if root.screen == 2: VerticalLayout {
+                if root.screen == 3: VerticalLayout {
                     alignment: center;
                     Rectangle {
                         height: 200px;
@@ -332,7 +444,7 @@ export component AppWindow inherits Window {
                 }
 
                 // Wrapping (issue 08)
-                if root.screen == 3: VerticalLayout {
+                if root.screen == 4: VerticalLayout {
                     spacing: 20px;
                     alignment: center;
                     Text {
@@ -355,6 +467,64 @@ export component AppWindow inherits Window {
                             width: parent.width * clamp(root.wrap-progress, 0.0, 1.0);
                             background: #2e7d32;
                             border-radius: 6px;
+                        }
+                    }
+                }
+
+                // Telemetry — system metrics + backlight (Up/Down adjust).
+                if root.screen == 5: VerticalLayout {
+                    spacing: 12px;
+                    HorizontalLayout {
+                        spacing: 12px;
+                        InfoRow { label: "CPU"; value: root.tele-cpu; }
+                        InfoRow { label: "Memory"; value: root.tele-mem; }
+                    }
+                    HorizontalLayout {
+                        spacing: 12px;
+                        InfoRow { label: "SoC temp"; value: root.tele-temp + " °C"; }
+                        InfoRow { label: "Uptime"; value: root.tele-uptime; }
+                    }
+                    InfoRow { label: "Network"; value: root.tele-net; }
+                    // Backlight: value + bar + d-pad hint.
+                    Rectangle {
+                        height: 64px;
+                        background: #ffffff;
+                        border-color: #d4dae2;
+                        border-width: 1px;
+                        border-radius: 6px;
+                        VerticalLayout {
+                            padding: 10px;
+                            spacing: 6px;
+                            HorizontalLayout {
+                                Text {
+                                    text: "Backlight";
+                                    color: #8a97a6;
+                                    font-size: 15px;
+                                    horizontal-stretch: 1;
+                                    vertical-alignment: center;
+                                }
+                                Text {
+                                    text: root.backlight-text + "   ▲ / ▼ adjust";
+                                    color: #1f2933;
+                                    font-size: 16px;
+                                    font-weight: 700;
+                                    horizontal-stretch: 0;
+                                    vertical-alignment: center;
+                                }
+                            }
+                            Rectangle {
+                                height: 14px;
+                                background: #e3e8ee;
+                                border-radius: 3px;
+                                Rectangle {
+                                    x: 0;
+                                    y: 0;
+                                    height: parent.height;
+                                    width: parent.width * clamp(root.backlight-percent / 100, 0.0, 1.0);
+                                    background: #c792ea;
+                                    border-radius: 3px;
+                                }
+                            }
                         }
                     }
                 }

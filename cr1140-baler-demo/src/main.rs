@@ -31,13 +31,16 @@ mod app {
     use crate::wrapping::{WrapState, Wrapping};
     use crate::AppWindow;
 
-    /// UI screen index for the `screen` property (0 Menu .. 3 Wrapping).
+    /// UI screen index for the `screen` property
+    /// (0 Menu · 1 Dashboard · 2 Bale Counter · 3 Knives · 4 Wrapping · 5 Telemetry).
     pub fn screen_index(s: Screen) -> i32 {
         match s {
             Screen::Menu => 0,
-            Screen::BaleCounter => 1,
-            Screen::Knives => 2,
-            Screen::Wrapping => 3,
+            Screen::Dashboard => 1,
+            Screen::BaleCounter => 2,
+            Screen::Knives => 3,
+            Screen::Wrapping => 4,
+            Screen::Telemetry => 5,
         }
     }
 
@@ -45,10 +48,34 @@ mod app {
     pub fn footer_for(s: Screen) -> [&'static str; 6] {
         match s {
             Screen::Menu => ["", "", "", "", "", "Exit"],
+            // Combined dashboard: counter keys + wrapping keys on one screen.
+            Screen::Dashboard => [
+                "+1 Bale",
+                "Start Wrap",
+                "Reset Sess",
+                "Reset Total",
+                "Cancel",
+                "Back",
+            ],
             Screen::BaleCounter => ["Reset Sess", "+1 Bale", "Reset Total", "", "", "Back"],
             Screen::Knives => ["Toggle", "", "", "", "", "Back"],
             Screen::Wrapping => ["Start Wrap", "Cancel", "", "", "", "Back"],
+            // Up/Down adjust the backlight (shown by the centre d-pad hint).
+            Screen::Telemetry => ["", "", "", "", "", "Back"],
         }
+    }
+
+    /// Pre-formatted telemetry view, filled by the main loop (~1 Hz) and pushed
+    /// to the UI by [`refresh`]. Strings are ASCII / markup-embedded glyphs only.
+    #[derive(Default)]
+    pub struct Tele {
+        pub cpu: String,
+        pub mem: String,
+        pub temp: String,
+        pub uptime: String,
+        pub net: String,
+        pub backlight_text: String,
+        pub backlight_pct: i32,
     }
 
     fn set_sk(ui: &AppWindow, i: usize, label: &str) {
@@ -81,6 +108,63 @@ mod app {
         knives_in: Option<bool>,
         wrap_active: Option<bool>,
         wrap_progress: Option<f32>,
+        tele_cpu: String,
+        tele_mem: String,
+        tele_temp: String,
+        tele_uptime: String,
+        tele_net: String,
+        backlight_text: String,
+        backlight_pct: Option<i32>,
+    }
+
+    // Push the bale-counter fields (shared by the Bale Counter and Dashboard
+    // screens), only where changed.
+    fn push_counter(ui: &AppWindow, cache: &mut UiCache, counter: &Counter, now_ms: u64) {
+        let session = counter.session().to_string();
+        if cache.session != session {
+            ui.set_session_count(session.clone().into());
+            cache.session = session;
+        }
+        let total = counter.total().to_string();
+        if cache.total != total {
+            ui.set_total_count(total.clone().into());
+            cache.total = total;
+        }
+        let avg = format!("{:.2}", counter.avg_diameter_m());
+        if cache.avg != avg {
+            ui.set_avg_diameter(avg.clone().into());
+            cache.avg = avg;
+        }
+        let bph = format!("{:.0}", counter.bales_per_hour(now_ms));
+        if cache.bph != bph {
+            ui.set_bales_per_hour(bph.clone().into());
+            cache.bph = bph;
+        }
+        let net = format!("{:.0}", counter.net_used_pct());
+        if cache.net != net {
+            ui.set_net_used(net.clone().into());
+            cache.net = net;
+        }
+        let armed = counter.reset_total_armed(now_ms);
+        if cache.reset_armed != Some(armed) {
+            ui.set_reset_armed(armed);
+            cache.reset_armed = Some(armed);
+        }
+    }
+
+    // Push the wrapping state + progress (shared by the Wrapping and Dashboard
+    // screens), only where changed.
+    fn push_wrapping(ui: &AppWindow, cache: &mut UiCache, wrapping: &Wrapping, now_ms: u64) {
+        let active = wrapping.state(now_ms) == WrapState::Wrapping;
+        if cache.wrap_active != Some(active) {
+            ui.set_wrapping_active(active);
+            cache.wrap_active = Some(active);
+        }
+        let p = wrapping.progress(now_ms);
+        if cache.wrap_progress.map_or(true, |c| (c - p).abs() > 0.002) {
+            ui.set_wrap_progress(p);
+            cache.wrap_progress = Some(p);
+        }
     }
 
     /// Push the current model state into the UI, only where it changed.
@@ -92,6 +176,7 @@ mod app {
         counter: &Counter,
         knives: &Knives,
         wrapping: &Wrapping,
+        tele: &Tele,
         now_ms: u64,
         clock: &str,
     ) {
@@ -125,38 +210,12 @@ mod app {
         }
 
         match screen {
-            Screen::BaleCounter => {
-                let session = counter.session().to_string();
-                if cache.session != session {
-                    ui.set_session_count(session.clone().into());
-                    cache.session = session;
-                }
-                let total = counter.total().to_string();
-                if cache.total != total {
-                    ui.set_total_count(total.clone().into());
-                    cache.total = total;
-                }
-                let avg = format!("{:.2}", counter.avg_diameter_m());
-                if cache.avg != avg {
-                    ui.set_avg_diameter(avg.clone().into());
-                    cache.avg = avg;
-                }
-                let bph = format!("{:.0}", counter.bales_per_hour(now_ms));
-                if cache.bph != bph {
-                    ui.set_bales_per_hour(bph.clone().into());
-                    cache.bph = bph;
-                }
-                let net = format!("{:.0}", counter.net_used_pct());
-                if cache.net != net {
-                    ui.set_net_used(net.clone().into());
-                    cache.net = net;
-                }
-                let armed = counter.reset_total_armed(now_ms);
-                if cache.reset_armed != Some(armed) {
-                    ui.set_reset_armed(armed);
-                    cache.reset_armed = Some(armed);
-                }
+            Screen::Dashboard => {
+                push_counter(ui, cache, counter, now_ms);
+                push_wrapping(ui, cache, wrapping, now_ms);
             }
+            Screen::BaleCounter => push_counter(ui, cache, counter, now_ms),
+            Screen::Wrapping => push_wrapping(ui, cache, wrapping, now_ms),
             Screen::Knives => {
                 let ki = knives.is_in();
                 if cache.knives_in != Some(ki) {
@@ -164,16 +223,34 @@ mod app {
                     cache.knives_in = Some(ki);
                 }
             }
-            Screen::Wrapping => {
-                let active = wrapping.state(now_ms) == WrapState::Wrapping;
-                if cache.wrap_active != Some(active) {
-                    ui.set_wrapping_active(active);
-                    cache.wrap_active = Some(active);
+            Screen::Telemetry => {
+                if cache.tele_cpu != tele.cpu {
+                    ui.set_tele_cpu(tele.cpu.clone().into());
+                    cache.tele_cpu = tele.cpu.clone();
                 }
-                let p = wrapping.progress(now_ms);
-                if cache.wrap_progress.map_or(true, |c| (c - p).abs() > 0.002) {
-                    ui.set_wrap_progress(p);
-                    cache.wrap_progress = Some(p);
+                if cache.tele_mem != tele.mem {
+                    ui.set_tele_mem(tele.mem.clone().into());
+                    cache.tele_mem = tele.mem.clone();
+                }
+                if cache.tele_temp != tele.temp {
+                    ui.set_tele_temp(tele.temp.clone().into());
+                    cache.tele_temp = tele.temp.clone();
+                }
+                if cache.tele_uptime != tele.uptime {
+                    ui.set_tele_uptime(tele.uptime.clone().into());
+                    cache.tele_uptime = tele.uptime.clone();
+                }
+                if cache.tele_net != tele.net {
+                    ui.set_tele_net(tele.net.clone().into());
+                    cache.tele_net = tele.net.clone();
+                }
+                if cache.backlight_text != tele.backlight_text {
+                    ui.set_backlight_text(tele.backlight_text.clone().into());
+                    cache.backlight_text = tele.backlight_text.clone();
+                }
+                if cache.backlight_pct != Some(tele.backlight_pct) {
+                    ui.set_backlight_percent(tele.backlight_pct);
+                    cache.backlight_pct = Some(tele.backlight_pct);
                 }
             }
             Screen::Menu => {}
@@ -190,9 +267,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     use crate::wrapping::Wrapping;
     use cr1140_hal::display::FbDisplay;
     use cr1140_hal::input::{Button, ButtonEvent, ButtonReader};
-    use cr1140_hal::sys::Nvmem;
+    use cr1140_hal::sys::{backlight_max, set_backlight, Nvmem, BACKLIGHT, BACKLIGHT_MAX_HINT};
+    use cr1140_sdk::device::{iface_ipv4, read_operstate};
+    use cr1140_sdk::metrics::format_uptime;
     use cr1140_sdk::retain::Store as RetainStore;
-    use cr1140_sdk::ShutdownGuard;
+    use cr1140_sdk::{ShutdownGuard, Telemetry};
     use cr1140_slint::{FbPlatform, Xrgb8888};
     use slint::platform::set_platform;
     use slint::platform::software_renderer::{MinimalSoftwareWindow, RepaintBufferType};
@@ -273,6 +352,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     ui.set_menu1(entries[0].into());
     ui.set_menu2(entries[1].into());
     ui.set_menu3(entries[2].into());
+    ui.set_menu4(entries[3].into());
+    ui.set_menu5(entries[4].into());
 
     // --- retain: reflash-surviving lifetime total on the SPI EEPROM ---
     // The demo owns the whole retain region (sole `BalerRetain` blob). If the
@@ -312,6 +393,27 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut knives = Knives::new();
     let mut wrapping = Wrapping::new();
 
+    // --- telemetry + backlight (Telemetry screen) ---
+    // No HAL getter for the current brightness, so set a known value at startup
+    // (full) — the displayed % then matches reality. `ShutdownGuard` restores the
+    // pre-launch backlight on exit. Up/Down on the Telemetry screen adjust it.
+    let bl_max = backlight_max(BACKLIGHT)
+        .unwrap_or(BACKLIGHT_MAX_HINT)
+        .max(1);
+    let mut backlight = bl_max;
+    let _ = set_backlight(BACKLIGHT, backlight);
+    let bl_step = (bl_max / 10).max(1);
+    let mut telemetry = Telemetry::new();
+    let mut tele = app::Tele::default();
+    let mut last_sample_ms: Option<u64> = None;
+    // Helper: format the backlight % into the tele view.
+    let backlight_view = |tele: &mut app::Tele, value: u32| {
+        let pct = (value * 100 / bl_max) as i32;
+        tele.backlight_pct = pct;
+        tele.backlight_text = format!("{pct} %");
+    };
+    backlight_view(&mut tele, backlight);
+
     // Monotonic clock for the injected-time model methods (debounce, bales/hr,
     // reset-arm window, wrap cycle).
     let start = Instant::now();
@@ -342,6 +444,26 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                             }
                         }
                     }
+                    // Combined dashboard: counter keys (F1/F3/F4) + wrapping
+                    // keys (F2/F5) on one screen.
+                    Screen::Dashboard => match btn {
+                        Button::F1 => bus.send(&counter.add_bale(now_ms)),
+                        Button::F2 => {
+                            if let Some(cmd) = wrapping.start(now_ms) {
+                                bus.send(&cmd);
+                            }
+                        }
+                        Button::F3 => counter.reset_session(),
+                        Button::F4 => {
+                            let _ = counter.press_reset_total(now_ms);
+                        }
+                        Button::F5 => wrapping.cancel(),
+                        Button::F6 => {
+                            counter.disarm_reset_total();
+                            router.handle(Nav::Back);
+                        }
+                        _ => {}
+                    },
                     Screen::BaleCounter => match btn {
                         Button::F1 => counter.reset_session(),
                         Button::F2 => bus.send(&counter.add_bale(now_ms)),
@@ -376,6 +498,22 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         }
                         _ => {}
                     },
+                    Screen::Telemetry => match btn {
+                        Button::Up => {
+                            backlight = (backlight + bl_step).min(bl_max);
+                            let _ = set_backlight(BACKLIGHT, backlight);
+                            backlight_view(&mut tele, backlight);
+                        }
+                        Button::Down => {
+                            backlight = backlight.saturating_sub(bl_step);
+                            let _ = set_backlight(BACKLIGHT, backlight);
+                            backlight_view(&mut tele, backlight);
+                        }
+                        Button::F6 => {
+                            router.handle(Nav::Back);
+                        }
+                        _ => {}
+                    },
                 }
             }
         }
@@ -384,6 +522,22 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         if counter.needs_persist(now_ms) {
             persist(&retain, &counter);
             counter.mark_persisted();
+        }
+
+        // --- telemetry: refresh ~1 Hz via the SDK's aggregated snapshot ---
+        if last_sample_ms.map_or(true, |t| now_ms.saturating_sub(t) >= 1000) {
+            last_sample_ms = Some(now_ms);
+            let snap = telemetry.sample();
+            tele.cpu = snap.cpu_percent.map_or("—".into(), |p| format!("{p:.0} %"));
+            tele.mem = snap
+                .mem
+                .map_or("—".into(), |m| format!("{:.0} %", m.used_percent()));
+            // The "°C" unit is appended in the .slint markup so its glyph embeds.
+            tele.temp = snap.soc_temp_c.map_or("—".into(), |t| format!("{t:.1}"));
+            tele.uptime = snap.uptime_secs.map_or("—".into(), format_uptime);
+            let can = read_operstate("can0");
+            let eth = iface_ipv4("eth0").unwrap_or_else(|| read_operstate("eth0"));
+            tele.net = format!("CAN {can} / eth0 {eth}");
         }
 
         // --- live clock from system time (UTC), pushed only on change below ---
@@ -400,7 +554,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
         // --- push model state into the UI (change-detected) ---
         app::refresh(
-            &ui, &mut cache, &router, &counter, &knives, &wrapping, now_ms, &clock,
+            &ui, &mut cache, &router, &counter, &knives, &wrapping, &tele, now_ms, &clock,
         );
 
         // --- render only when dirty, then blit + flip the framebuffer ---
