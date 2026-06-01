@@ -1,0 +1,84 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# Cancel in-progress runs for the same ref when a newer commit is pushed.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+# Least privilege: jobs only read the repo contents.
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
+
+jobs:
+  # Format, lint, and test on the host (x86_64 Linux).
+  # Pure-logic modules compile/test cross-platform even though many runtime
+  # paths are #[cfg(target_os = "linux")]-gated.
+  lint-test:
+    name: fmt / clippy / test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Stable toolchain pinned to a major tag; rustfmt + clippy components.
+      - name: Install Rust (stable)
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      # Cache registry, git deps, and target/ keyed on Cargo.lock + toolchain.
+      - name: Cache cargo artifacts
+        uses: Swatinem/rust-cache@v2
+
+      - name: Format check
+        run: cargo fmt --all --check
+
+      # -D warnings is scoped to the two published crates (cr1140-hal,
+      # cr1140-sdk) so the demos' host-stub dead_code warnings don't fail CI.
+      - name: Clippy (published crates)
+        run: cargo clippy -p cr1140-hal -p cr1140-sdk --all-targets -- -D warnings
+
+      - name: Test (workspace)
+        run: cargo test --workspace
+
+  # Prove the real device target builds: static aarch64 musl via cargo-zigbuild.
+  # Slint is configured for the software renderer (no system backends/fontconfig)
+  # so the workspace cross-compiles cleanly.
+  cross-build:
+    name: zigbuild aarch64-musl
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust (stable)
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Add aarch64 musl target
+        run: rustup target add aarch64-unknown-linux-musl
+
+      # Zig provides the cross C toolchain that cargo-zigbuild drives.
+      - name: Install Zig
+        uses: mlugg/setup-zig@v2
+
+      - name: Cache cargo artifacts
+        uses: Swatinem/rust-cache@v2
+        with:
+          # Separate cache from the lint-test job (different target dir contents).
+          key: aarch64-musl
+
+      # cargo-zigbuild is cached by rust-cache's bin cache; force-install is
+      # cheap on a hit. --locked keeps it reproducible.
+      - name: Install cargo-zigbuild
+        run: cargo install cargo-zigbuild --locked
+
+      # Debug build (no --release) is enough to prove it links and is faster.
+      - name: Cross-build workspace
+        run: cargo zigbuild --workspace --target aarch64-unknown-linux-musl

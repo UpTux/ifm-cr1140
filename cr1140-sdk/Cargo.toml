@@ -1,15 +1,23 @@
 [package]
 name = "cr1140-sdk"
 version = "0.1.0"
-edition = "2021"
-authors = ["Patrick Dahlke (patdhlk) <me@patrickdahlke.com>"]
-publish = false
 description = "App-building conveniences on top of cr1140-hal: LED effects, system telemetry, device/network info. UI-framework agnostic."
+edition.workspace      = true
 # Dual-licensed: GPLv3 for open-source use, or a commercial license — see LICENSING.md.
-license = "GPL-3.0-only"
+license.workspace      = true
+authors.workspace      = true
+repository.workspace   = true
+rust-version.workspace = true
+readme        = "README.md"
+documentation = "https://docs.rs/cr1140-sdk"
+keywords      = ["cr1140", "ifm", "embedded", "telemetry", "linux"]
+categories    = ["embedded", "os::linux-apis"]
+
+[package.metadata.docs.rs]
+all-features = true
 
 [dependencies]
-cr1140-hal = { path = "../cr1140-hal" }
+cr1140-hal = { path = "../cr1140-hal", version = "0.1" }
 nix = { version = "0.29", features = ["net"] } # getifaddrs for interface IPs
 tracing = "0.1"                                # facade only; no subscriber in the lib
 thiserror = "2"                                # matches cr1140-hal's major

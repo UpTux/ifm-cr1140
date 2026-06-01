@@ -1,11 +1,20 @@
 [package]
 name = "cr1140-hal"
 version = "0.1.0"
-edition = "2021"
-authors = ["Patrick Dahlke (patdhlk) <me@patrickdahlke.com>"]
 description = "Hardware abstraction layer for the ifm CR1140/CR1141 (aarch64, Yocto Linux)"
+edition.workspace      = true
 # Dual-licensed: GPLv3 for open-source use, or a commercial license — see LICENSING.md.
-license = "GPL-3.0-only"
+license.workspace      = true
+authors.workspace      = true
+repository.workspace   = true
+rust-version.workspace = true
+readme        = "README.md"
+documentation = "https://docs.rs/cr1140-hal"
+keywords      = ["cr1140", "ifm", "hal", "embedded", "framebuffer"]
+categories    = ["embedded", "hardware-support", "os::linux-apis"]
+
+[package.metadata.docs.rs]
+all-features = true
 
 [dependencies]
 nix = { version = "0.29", features = ["mman", "fs", "poll"] }
