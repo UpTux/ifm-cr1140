@@ -19,6 +19,7 @@ mod can;
 mod counter;
 mod knives;
 mod router;
+mod settings;
 mod wrapping;
 
 #[cfg(target_os = "linux")]
@@ -28,11 +29,13 @@ mod app {
     use crate::counter::Counter;
     use crate::knives::Knives;
     use crate::router::{Router, Screen};
+    use crate::settings::{Fieldbus, Settings};
     use crate::wrapping::{WrapState, Wrapping};
     use crate::AppWindow;
 
     /// UI screen index for the `screen` property
-    /// (0 Menu · 1 Dashboard · 2 Bale Counter · 3 Knives · 4 Wrapping · 5 Telemetry).
+    /// (0 Menu · 1 Dashboard · 2 Bale Counter · 3 Knives · 4 Wrapping ·
+    /// 5 Telemetry · 6 Settings).
     pub fn screen_index(s: Screen) -> i32 {
         match s {
             Screen::Menu => 0,
@@ -41,6 +44,15 @@ mod app {
             Screen::Knives => 3,
             Screen::Wrapping => 4,
             Screen::Telemetry => 5,
+            Screen::Settings => 6,
+        }
+    }
+
+    /// Human-readable label for a fieldbus, shown on the Settings screen.
+    pub fn fieldbus_label(fb: Fieldbus) -> &'static str {
+        match fb {
+            Fieldbus::EtherCat => "EtherCAT",
+            Fieldbus::Ethernet => "Ethernet",
         }
     }
 
@@ -62,7 +74,41 @@ mod app {
             Screen::Wrapping => ["Start Wrap", "Cancel", "", "", "", "Back"],
             // Up/Down adjust the backlight (shown by the centre d-pad hint).
             Screen::Telemetry => ["", "", "", "", "", "Back"],
+            // Static fallback only — the real Settings footer is computed at the
+            // refresh site (it depends on pending vs booted + the wrap interlock).
+            Screen::Settings => ["Switch", "", "", "", "", "Back"],
         }
+    }
+
+    /// Dynamic soft-key footer for the Settings screen. Unlike the other screens
+    /// the labels depend on live model state (the pending selection, whether a
+    /// reboot is required / armed, and the wrapping safe-state interlock), so it
+    /// is computed here rather than in [`footer_for`].
+    pub fn settings_footer(settings: &Settings, interlocked: bool, now_ms: u64) -> [String; 6] {
+        // F1: blocked (empty) while wrapping; otherwise offer the other bus.
+        let f1 = if interlocked {
+            String::new()
+        } else {
+            format!("Use {}", fieldbus_label(settings.pending().toggled()))
+        };
+        // F5: reboot affordance, only when a reboot is required.
+        let f5 = if settings.reboot_required() {
+            if settings.reboot_armed(now_ms) {
+                "Press again".to_string()
+            } else {
+                "Reboot now".to_string()
+            }
+        } else {
+            String::new()
+        };
+        [
+            f1,
+            String::new(),
+            String::new(),
+            String::new(),
+            f5,
+            "Back".to_string(),
+        ]
     }
 
     /// Pre-formatted telemetry view, filled by the main loop (~1 Hz) and pushed
@@ -115,6 +161,12 @@ mod app {
         tele_net: String,
         backlight_text: String,
         backlight_pct: Option<i32>,
+        set_booted: String,
+        set_selected: String,
+        set_reboot_required: Option<bool>,
+        set_reboot_armed: Option<bool>,
+        set_wrapping_active: Option<bool>,
+        set_eth: String,
     }
 
     // Push the bale-counter fields (shared by the Bale Counter and Dashboard
@@ -176,6 +228,8 @@ mod app {
         counter: &Counter,
         knives: &Knives,
         wrapping: &Wrapping,
+        settings: &Settings,
+        eth: &str,
         tele: &Tele,
         now_ms: u64,
         clock: &str,
@@ -201,9 +255,19 @@ mod app {
             ui.set_screen_title(title.into());
             cache.title = title.to_string();
         }
-        let footer = footer_for(screen);
-        for (i, label) in footer.iter().enumerate() {
-            if cache.sk[i] != *label {
+        // The Settings footer is dynamic (depends on the pending selection, the
+        // reboot arm state, and the wrapping safe-state interlock), so compute it
+        // here; every other screen uses the static `footer_for` table.
+        let interlocked = wrapping.state(now_ms) == WrapState::Wrapping;
+        let dyn_footer =
+            (screen == Screen::Settings).then(|| settings_footer(settings, interlocked, now_ms));
+        let static_footer = footer_for(screen);
+        for i in 0..6 {
+            let label: &str = match &dyn_footer {
+                Some(f) => f[i].as_str(),
+                None => static_footer[i],
+            };
+            if cache.sk[i] != label {
                 set_sk(ui, i, label);
                 cache.sk[i] = label.to_string();
             }
@@ -253,6 +317,36 @@ mod app {
                     cache.backlight_pct = Some(tele.backlight_pct);
                 }
             }
+            Screen::Settings => {
+                let booted = fieldbus_label(settings.booted()).to_string();
+                if cache.set_booted != booted {
+                    ui.set_set_booted(booted.clone().into());
+                    cache.set_booted = booted;
+                }
+                let selected = fieldbus_label(settings.pending()).to_string();
+                if cache.set_selected != selected {
+                    ui.set_set_selected(selected.clone().into());
+                    cache.set_selected = selected;
+                }
+                let reboot_required = settings.reboot_required();
+                if cache.set_reboot_required != Some(reboot_required) {
+                    ui.set_set_reboot_required(reboot_required);
+                    cache.set_reboot_required = Some(reboot_required);
+                }
+                let reboot_armed = settings.reboot_armed(now_ms);
+                if cache.set_reboot_armed != Some(reboot_armed) {
+                    ui.set_set_reboot_armed(reboot_armed);
+                    cache.set_reboot_armed = Some(reboot_armed);
+                }
+                if cache.set_wrapping_active != Some(interlocked) {
+                    ui.set_set_wrapping_active(interlocked);
+                    cache.set_wrapping_active = Some(interlocked);
+                }
+                if cache.set_eth != eth {
+                    ui.set_set_eth(eth.into());
+                    cache.set_eth = eth.to_string();
+                }
+            }
             Screen::Menu => {}
         }
     }
@@ -264,7 +358,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     use crate::counter::{BalerRetain, Counter};
     use crate::knives::Knives;
     use crate::router::{Effect, Nav, Router, Screen};
-    use crate::wrapping::Wrapping;
+    use crate::settings::Fieldbus;
+    use crate::settings::{RebootPress, Settings};
+    use crate::wrapping::{WrapState, Wrapping};
     use cr1140_hal::display::FbDisplay;
     use cr1140_hal::input::{Button, ButtonEvent, ButtonReader};
     use cr1140_hal::sys::{backlight_max, set_backlight, Nvmem, BACKLIGHT, BACKLIGHT_MAX_HINT};
@@ -377,21 +473,28 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .and_then(|s| s.load_or_default().ok())
         .unwrap_or_default();
 
-    // Persist the current lifetime total to retain (write-only-if-changed inside
-    // the store; we additionally debounce calls so bale bursts coalesce).
-    let persist = |store: &Option<RetainStore<BalerRetain>>, counter: &Counter| {
-        if let Some(store) = store {
-            if let Err(e) = store.save(&counter.to_retain()) {
-                tracing::warn!(error = %e, "failed to persist lifetime total");
+    // Persist the current lifetime total + the chosen fieldbus to retain
+    // (write-only-if-changed inside the store; we additionally debounce calls so
+    // bale bursts coalesce). The fieldbus is owned by the Settings model, so the
+    // caller threads `settings.pending()` in via `Counter::to_retain`.
+    let persist =
+        |store: &Option<RetainStore<BalerRetain>>, counter: &Counter, fieldbus: Fieldbus| {
+            if let Some(store) = store {
+                if let Err(e) = store.save(&counter.to_retain(fieldbus)) {
+                    tracing::warn!(error = %e, "failed to persist lifetime total");
+                }
             }
-        }
-    };
+        };
 
     // --- models + navigation ---
     let mut router = Router::new();
     let mut counter = Counter::from_retain(&loaded);
     let mut knives = Knives::new();
     let mut wrapping = Wrapping::new();
+    // SEAM: a future Taktora host applies BalerRetain.fieldbus to eth0 at boot;
+    // this demo is flag-only (no eth0 change).
+    let mut settings = Settings::new(loaded.fieldbus);
+    tracing::info!(mode = ?settings.booted(), "booted fieldbus");
 
     // --- telemetry + backlight (Telemetry screen) ---
     // No HAL getter for the current brightness, so set a known value at startup
@@ -418,6 +521,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // reset-arm window, wrap cycle).
     let start = Instant::now();
     let mut cache = app::UiCache::default();
+    // Live eth0 link string (IPv4 or operstate), refreshed in the ~1 Hz sample
+    // block and shown on both Telemetry and Settings.
+    let mut eth = iface_ipv4("eth0").unwrap_or_else(|| read_operstate("eth0"));
 
     tracing::info!("ready; baler panel on /dev/fb0 (F6 or Ctrl-C to exit)");
 
@@ -514,13 +620,43 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         }
                         _ => {}
                     },
+                    Screen::Settings => match btn {
+                        // F1 Switch fieldbus — blocked while wrapping (safe-state
+                        // interlock). A successful toggle is cheap, so persist the
+                        // new pending selection immediately (write-only-if-changed
+                        // makes this safe), so a power loss before reboot keeps it.
+                        Button::F1 => {
+                            let safe = wrapping.state(now_ms) != WrapState::Wrapping;
+                            if settings.toggle(safe) {
+                                persist(&retain, &counter, settings.pending());
+                            }
+                        }
+                        // F5 Reboot to apply — double-confirm; the second press
+                        // within the window flushes retain and reboots.
+                        Button::F5 => {
+                            if let Some(RebootPress::Committed) = settings.press_reboot(now_ms) {
+                                // Force-flush the pending selection + total first.
+                                persist(&retain, &counter, settings.pending());
+                                tracing::warn!("rebooting to apply fieldbus change");
+                                let _ = std::process::Command::new("systemctl")
+                                    .arg("reboot")
+                                    .status();
+                            }
+                        }
+                        Button::F6 => {
+                            // Leaving the screen auto-disarms a pending reboot.
+                            settings.disarm_reboot();
+                            router.handle(Nav::Back);
+                        }
+                        _ => {}
+                    },
                 }
             }
         }
 
-        // --- retain: debounced persist of the lifetime total ---
+        // --- retain: debounced persist of the lifetime total (+ fieldbus) ---
         if counter.needs_persist(now_ms) {
-            persist(&retain, &counter);
+            persist(&retain, &counter, settings.pending());
             counter.mark_persisted();
         }
 
@@ -536,7 +672,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             tele.temp = snap.soc_temp_c.map_or("—".into(), |t| format!("{t:.1}"));
             tele.uptime = snap.uptime_secs.map_or("—".into(), format_uptime);
             let can = read_operstate("can0");
-            let eth = iface_ipv4("eth0").unwrap_or_else(|| read_operstate("eth0"));
+            // Live eth0 link: prefer the bound IPv4, else the operstate. Reused
+            // by both the Telemetry net line and the Settings link row.
+            eth = iface_ipv4("eth0").unwrap_or_else(|| read_operstate("eth0"));
             tele.net = format!("CAN {can} / eth0 {eth}");
         }
 
@@ -554,7 +692,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
         // --- push model state into the UI (change-detected) ---
         app::refresh(
-            &ui, &mut cache, &router, &counter, &knives, &wrapping, &tele, now_ms, &clock,
+            &ui, &mut cache, &router, &counter, &knives, &wrapping, &settings, &eth, &tele, now_ms,
+            &clock,
         );
 
         // --- render only when dirty, then blit + flip the framebuffer ---
@@ -577,7 +716,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Always flush a pending lifetime total on graceful exit (debounce may not
     // have elapsed) — within the retain module's low-frequency envelope.
     if counter.is_dirty() {
-        persist(&retain, &counter);
+        persist(&retain, &counter, settings.pending());
         counter.mark_persisted();
     }
 

@@ -11,6 +11,8 @@ pub enum Screen {
     Wrapping,
     /// System telemetry (CPU/mem/temp/uptime/network) + backlight control.
     Telemetry,
+    /// Operator settings (network mode, reboot).
+    Settings,
 }
 
 /// Keypad navigation events the router understands. Mapped in main.rs:
@@ -31,13 +33,15 @@ pub enum Effect {
 }
 
 /// Fixed home-menu order. Index maps to the sub-screen opened on `Nav::Enter`:
-/// 0 → Dashboard, 1 → BaleCounter, 2 → Knives, 3 → Wrapping, 4 → Telemetry.
-const MENU_ENTRIES: [&str; 5] = [
+/// 0 → Dashboard, 1 → BaleCounter, 2 → Knives, 3 → Wrapping, 4 → Telemetry,
+/// 5 → Settings.
+const MENU_ENTRIES: [&str; 6] = [
     "Dashboard",
     "Bale Counter",
     "Knives",
     "Wrapping",
     "Telemetry",
+    "Settings",
 ];
 
 /// Maps a menu cursor index onto the sub-screen it opens. Indices outside the
@@ -50,6 +54,7 @@ fn screen_for_index(index: usize) -> Screen {
         2 => Screen::Knives,
         3 => Screen::Wrapping,
         4 => Screen::Telemetry,
+        5 => Screen::Settings,
         _ => Screen::Menu,
     }
 }
@@ -87,6 +92,7 @@ impl Router {
             Screen::Knives => MENU_ENTRIES[2],
             Screen::Wrapping => MENU_ENTRIES[3],
             Screen::Telemetry => MENU_ENTRIES[4],
+            Screen::Settings => MENU_ENTRIES[5],
         }
     }
 
@@ -161,7 +167,8 @@ mod tests {
                 "Bale Counter",
                 "Knives",
                 "Wrapping",
-                "Telemetry"
+                "Telemetry",
+                "Settings"
             ]
         );
     }
@@ -177,11 +184,11 @@ mod tests {
     #[test]
     fn down_wraps_from_last_to_first() {
         let mut r = Router::new();
-        for _ in 0..4 {
-            r.handle(Nav::Down); // 0 -> 1 -> 2 -> 3 -> 4 (last)
+        for _ in 0..5 {
+            r.handle(Nav::Down); // 0 -> 1 -> 2 -> 3 -> 4 -> 5 (last)
         }
-        assert_eq!(r.menu_cursor(), 4);
-        r.handle(Nav::Down); // 4 -> 0 (wrap)
+        assert_eq!(r.menu_cursor(), 5);
+        r.handle(Nav::Down); // 5 -> 0 (wrap)
         assert_eq!(r.menu_cursor(), 0);
     }
 
@@ -189,10 +196,10 @@ mod tests {
     fn up_wraps_from_first_to_last() {
         let mut r = Router::new();
         assert_eq!(r.menu_cursor(), 0);
-        assert_eq!(r.handle(Nav::Up), Effect::None); // 0 -> 4 (wrap)
+        assert_eq!(r.handle(Nav::Up), Effect::None); // 0 -> 5 (wrap)
+        assert_eq!(r.menu_cursor(), 5);
+        r.handle(Nav::Up); // 5 -> 4
         assert_eq!(r.menu_cursor(), 4);
-        r.handle(Nav::Up); // 4 -> 3
-        assert_eq!(r.menu_cursor(), 3);
         assert_eq!(r.screen(), Screen::Menu);
     }
 
@@ -281,5 +288,66 @@ mod tests {
         assert_eq!(d.screen(), Screen::Menu);
         assert_eq!(d.menu_cursor(), 0);
         assert_eq!(d.screen_title(), "Baler");
+    }
+
+    #[test]
+    fn settings_is_the_last_menu_entry() {
+        assert_eq!(Router::menu_entries().last(), Some(&"Settings"));
+    }
+
+    #[test]
+    fn enter_on_settings_row_opens_settings() {
+        let mut r = Router::new();
+        // Walk the cursor down to the last row (Settings).
+        for _ in 0..MENU_ENTRIES.len() - 1 {
+            r.handle(Nav::Down);
+        }
+        assert_eq!(r.handle(Nav::Enter), Effect::None);
+        assert_eq!(r.screen(), Screen::Settings);
+    }
+
+    #[test]
+    fn back_from_settings_returns_to_menu() {
+        let mut r = Router::new();
+        for _ in 0..MENU_ENTRIES.len() - 1 {
+            r.handle(Nav::Down);
+        }
+        r.handle(Nav::Enter);
+        assert_eq!(r.screen(), Screen::Settings);
+        assert_eq!(r.handle(Nav::Back), Effect::None);
+        assert_eq!(r.screen(), Screen::Menu);
+    }
+
+    #[test]
+    fn screen_title_for_settings_is_settings() {
+        let mut r = Router::new();
+        for _ in 0..MENU_ENTRIES.len() - 1 {
+            r.handle(Nav::Down);
+        }
+        r.handle(Nav::Enter);
+        assert_eq!(r.screen_title(), "Settings");
+    }
+
+    #[test]
+    fn up_from_first_wraps_to_settings_row() {
+        let mut r = Router::new();
+        assert_eq!(r.menu_cursor(), 0);
+        r.handle(Nav::Up); // 0 -> last (Settings)
+        assert_eq!(r.menu_cursor(), MENU_ENTRIES.len() - 1);
+        r.handle(Nav::Enter);
+        assert_eq!(r.screen(), Screen::Settings);
+    }
+
+    #[test]
+    fn down_from_settings_row_wraps_to_first() {
+        let mut r = Router::new();
+        for _ in 0..MENU_ENTRIES.len() - 1 {
+            r.handle(Nav::Down);
+        }
+        assert_eq!(r.menu_cursor(), MENU_ENTRIES.len() - 1);
+        r.handle(Nav::Down); // last -> 0 (wrap)
+        assert_eq!(r.menu_cursor(), 0);
+        r.handle(Nav::Enter);
+        assert_eq!(r.screen(), Screen::Dashboard);
     }
 }

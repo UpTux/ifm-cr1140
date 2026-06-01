@@ -204,6 +204,14 @@ export component AppWindow inherits Window {
     in property <string> backlight-text: "—";
     in property <int> backlight-percent: 0;
 
+    // --- Settings → Fieldbus screen ---
+    in property <string> set-booted: "EtherCAT";       // active (booted) fieldbus
+    in property <string> set-selected: "EtherCAT";     // pending selection
+    in property <bool> set-reboot-required: false;     // pending != booted
+    in property <bool> set-reboot-armed: false;        // double-confirm armed
+    in property <bool> set-wrapping-active: false;     // safe-state interlock
+    in property <string> set-eth: "—";                 // live eth0 link
+
     // --- soft-key footer labels (F1..F6) ---
     in property <string> sk1: "";
     in property <string> sk2: "";
@@ -527,6 +535,58 @@ export component AppWindow inherits Window {
                             }
                         }
                     }
+                }
+
+                // Settings → Fieldbus — switch EtherCAT / Ethernet (reboot to apply).
+                if root.screen == 6: VerticalLayout {
+                    spacing: 12px;
+                    Text {
+                        text: "Settings — Fieldbus";
+                        color: #1f2933;
+                        font-size: 18px;
+                        font-weight: 800;
+                    }
+                    InfoRow { label: "Active (booted)"; value: root.set-booted; }
+                    InfoRow {
+                        label: "Selected";
+                        value: root.set-selected + (root.set-reboot-required ? "  (pending)" : "");
+                    }
+                    // Reboot banner — only while a reboot is required.
+                    if root.set-reboot-required: Rectangle {
+                        height: 40px;
+                        background: #fff3cd;
+                        border-color: #e0a800;
+                        border-width: 1px;
+                        border-radius: 6px;
+                        Text {
+                            text: root.set-reboot-armed
+                                ? "⚠  Press F5 again to reboot now"
+                                : "⚠  Reboot required to apply";
+                            color: #8a6d00;
+                            font-size: 15px;
+                            font-weight: 700;
+                            vertical-alignment: center;
+                            horizontal-alignment: center;
+                        }
+                    }
+                    // Interlock notice — switching is blocked while wrapping.
+                    if root.set-wrapping-active: Text {
+                        text: "Switching disabled while wrapping is active.";
+                        color: #b03a2e;
+                        font-size: 14px;
+                        font-weight: 700;
+                    }
+                    Text {
+                        text: "EtherCAT is the default fieldbus.";
+                        color: #5a6b7a;
+                        font-size: 14px;
+                    }
+                    Text {
+                        text: "Ethernet = software update / diagnostics.";
+                        color: #5a6b7a;
+                        font-size: 14px;
+                    }
+                    InfoRow { label: "eth0"; value: root.set-eth; }
                 }
             }
         }

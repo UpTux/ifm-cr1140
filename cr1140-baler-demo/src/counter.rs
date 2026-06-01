@@ -8,6 +8,7 @@
 //! milliseconds) — time is injected so tests are free of wall-clock flakiness.
 
 use crate::can::Command;
+use crate::settings::Fieldbus;
 
 /// Debounce window: persist the retained total at most this long after the last
 /// change (coalesces bale bursts). Low-frequency-only per ADR-0002.
@@ -15,15 +16,32 @@ pub const PERSIST_DEBOUNCE_MS: u64 = 2_000;
 /// Double-confirm window for the lifetime-total reset (~2 s).
 pub const RESET_TOTAL_WINDOW_MS: u64 = 2_000;
 /// On-EEPROM schema version for [`BalerRetain`].
-pub const RETAIN_VERSION: u8 = 1;
+///
+/// Bumped to `2` when the [`fieldbus`](BalerRetain::fieldbus) field was added.
+pub const RETAIN_VERSION: u8 = 2;
 
 /// The sole retain `T` — the demo owns the whole EEPROM region (documented in
 /// CONTEXT.md). Co-running with an app that stores config in retain would
 /// clobber it.
+///
+/// ## v1 → v2 migration cost (ACCEPTED)
+///
+/// v1 persisted only `[version, total_bales]`. v2 appends `fieldbus`, so a v1
+/// postcard payload now has too few bytes to deserialize: [`Store::load`] returns
+/// `Err`, and the boot path's `…load_or_default().ok().unwrap_or_default()` falls
+/// back to [`BalerRetain::default`]. The practical effect is that on the *one*
+/// upgrade boot the lifetime `total_bales` resets to 0. This is accepted: the
+/// demo has no fielded unit carrying a real lifetime total, so there is nothing
+/// to preserve. After that first boot the v2 blob round-trips normally.
+///
+/// [`Store::load`]: cr1140_sdk::retain::Store::load
 #[derive(serde::Serialize, serde::Deserialize, Clone, PartialEq, Eq, Debug)]
 pub struct BalerRetain {
     pub version: u8,
     pub total_bales: u32,
+    /// The fieldbus the panel should boot in. Owned by the Settings model at
+    /// runtime; persisted here so a reboot applies the operator's choice.
+    pub fieldbus: Fieldbus,
 }
 
 impl Default for BalerRetain {
@@ -31,6 +49,7 @@ impl Default for BalerRetain {
         Self {
             version: RETAIN_VERSION,
             total_bales: 0,
+            fieldbus: Fieldbus::default(),
         }
     }
 }
@@ -119,11 +138,17 @@ impl Counter {
         self.dirty && now_ms.saturating_sub(self.dirty_since) >= PERSIST_DEBOUNCE_MS
     }
 
-    /// Snapshot the retained blob: current schema version + lifetime total.
-    pub fn to_retain(&self) -> BalerRetain {
+    /// Snapshot the retained blob: current schema version + lifetime total +
+    /// the caller's chosen `fieldbus`.
+    ///
+    /// The counter does **not** own the fieldbus (that lives in the Settings
+    /// model), so the caller threads it in — typically `settings.pending()`, so
+    /// a reboot applies the operator's latest selection.
+    pub fn to_retain(&self, fieldbus: Fieldbus) -> BalerRetain {
         BalerRetain {
             version: RETAIN_VERSION,
             total_bales: self.total,
+            fieldbus,
         }
     }
 
@@ -226,6 +251,21 @@ mod tests {
         assert!((a - b).abs() < 1e-3, "expected ~{b}, got {a}");
     }
 
+    // --- Settings -> Fieldbus: BalerRetain v2 ---
+
+    #[test]
+    fn balerretain_default_fieldbus_is_ethercat() {
+        assert_eq!(BalerRetain::default().fieldbus, Fieldbus::EtherCat);
+    }
+
+    #[test]
+    fn to_retain_carries_the_given_fieldbus() {
+        let c = Counter::default();
+        // The counter does not own the fieldbus; the caller threads it in.
+        assert_eq!(c.to_retain(Fieldbus::Ethernet).fieldbus, Fieldbus::Ethernet);
+        assert_eq!(c.to_retain(Fieldbus::EtherCat).fieldbus, Fieldbus::EtherCat);
+    }
+
     // --- issue 04: bale event + retain persistence ---
 
     #[test]
@@ -233,6 +273,7 @@ mod tests {
         let c = Counter::from_retain(&BalerRetain {
             version: RETAIN_VERSION,
             total_bales: 137,
+            fieldbus: Fieldbus::EtherCat,
         });
         assert_eq!(c.total(), 137);
         assert_eq!(c.session(), 0);
@@ -243,6 +284,7 @@ mod tests {
         let mut c = Counter::from_retain(&BalerRetain {
             version: RETAIN_VERSION,
             total_bales: 10,
+            fieldbus: Fieldbus::EtherCat,
         });
         assert!(!c.is_dirty());
         let cmd = c.add_bale(1_000);
@@ -276,10 +318,11 @@ mod tests {
         let mut c = Counter::from_retain(&BalerRetain {
             version: RETAIN_VERSION,
             total_bales: 5,
+            fieldbus: Fieldbus::EtherCat,
         });
         c.add_bale(0);
         c.add_bale(0);
-        let blob = c.to_retain();
+        let blob = c.to_retain(Fieldbus::EtherCat);
         assert_eq!(blob.version, RETAIN_VERSION);
         assert_eq!(blob.total_bales, 7);
     }
@@ -311,6 +354,7 @@ mod tests {
                 .save(&BalerRetain {
                     version: RETAIN_VERSION,
                     total_bales: 40,
+                    fieldbus: Fieldbus::EtherCat,
                 })
                 .unwrap();
 
@@ -319,7 +363,7 @@ mod tests {
             c.add_bale(0);
             c.add_bale(10);
             c.add_bale(20); // total 43
-            store.save(&c.to_retain()).unwrap();
+            store.save(&c.to_retain(Fieldbus::EtherCat)).unwrap();
             c.mark_persisted();
         }
 
@@ -377,6 +421,7 @@ mod tests {
         let mut c = Counter::from_retain(&BalerRetain {
             version: RETAIN_VERSION,
             total_bales: 100,
+            fieldbus: Fieldbus::EtherCat,
         });
         c.add_bale(0);
         c.add_bale(60_000);
@@ -396,6 +441,7 @@ mod tests {
         let mut c = Counter::from_retain(&BalerRetain {
             version: RETAIN_VERSION,
             total_bales: 99,
+            fieldbus: Fieldbus::EtherCat,
         });
         assert!(!c.reset_total_armed(0));
 
@@ -416,6 +462,7 @@ mod tests {
         let mut c = Counter::from_retain(&BalerRetain {
             version: RETAIN_VERSION,
             total_bales: 50,
+            fieldbus: Fieldbus::EtherCat,
         });
         assert_eq!(c.press_reset_total(0), ResetTotal::Armed);
 
@@ -437,6 +484,7 @@ mod tests {
         let mut c = Counter::from_retain(&BalerRetain {
             version: RETAIN_VERSION,
             total_bales: 7,
+            fieldbus: Fieldbus::EtherCat,
         });
         c.press_reset_total(0);
         assert!(c.reset_total_armed(0));
