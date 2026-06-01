@@ -112,12 +112,12 @@ struct FbFixScreeninfo {
 /// An mmap'd framebuffer ready for drawing via [`Surface`].
 pub struct FbDisplay {
     map: NonNull<u8>,
-    len: usize,            // total mapped bytes (buffer_len * num_buffers)
-    buffer_len: usize,     // bytes in one buffer (stride * height)
-    var: FbVarScreeninfo,  // kept for FBIOPAN_DISPLAY
-    num_buffers: u32,      // 1 (single) or 2 (double-buffered)
-    back: u32,             // index `surface()` draws into / `present()` flips to
-    _file: File,           // keep the fd open for the life of the mapping
+    len: usize,           // total mapped bytes (buffer_len * num_buffers)
+    buffer_len: usize,    // bytes in one buffer (stride * height)
+    var: FbVarScreeninfo, // kept for FBIOPAN_DISPLAY
+    num_buffers: u32,     // 1 (single) or 2 (double-buffered)
+    back: u32,            // index `surface()` draws into / `present()` flips to
+    _file: File,          // keep the fd open for the life of the mapping
     pub width: u32,
     pub height: u32,
     pub stride: u32,
@@ -158,8 +158,13 @@ impl FbDisplay {
             }
         }
 
-        check_xrgb8888(var.bits_per_pixel, var.red.offset, var.green.offset, var.blue.offset)
-            .map_err(HalError::UnsupportedFormat)?;
+        check_xrgb8888(
+            var.bits_per_pixel,
+            var.red.offset,
+            var.green.offset,
+            var.blue.offset,
+        )
+        .map_err(HalError::UnsupportedFormat)?;
 
         let yres = var.yres;
         let stride = fix.line_length;
@@ -223,7 +228,8 @@ impl FbDisplay {
     /// [`present`](Self::present).
     pub fn surface(&mut self) -> Surface<'_> {
         let off = buffer_byte_offset(self.back, self.height, self.stride);
-        let buf = unsafe { std::slice::from_raw_parts_mut(self.map.as_ptr().add(off), self.buffer_len) };
+        let buf =
+            unsafe { std::slice::from_raw_parts_mut(self.map.as_ptr().add(off), self.buffer_len) };
         Surface::new(buf, self.width, self.height, self.stride)
     }
 
@@ -247,7 +253,11 @@ impl FbDisplay {
     /// Power the panel down (`on = true`) or back up (`on = false`) via
     /// `FBIOBLANK`.
     pub fn blank(&self, on: bool) -> HalResult<()> {
-        let arg = if on { FB_BLANK_POWERDOWN } else { FB_BLANK_UNBLANK };
+        let arg = if on {
+            FB_BLANK_POWERDOWN
+        } else {
+            FB_BLANK_UNBLANK
+        };
         let fd = self._file.as_raw_fd();
         let rc = unsafe { libc::ioctl(fd, FBIOBLANK as _, arg) };
         if rc != 0 {

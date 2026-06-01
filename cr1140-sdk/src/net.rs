@@ -261,9 +261,18 @@ mod tests {
         let args = ip_args(&static_cfg()).unwrap();
         let joined = args.join(" ");
         assert!(joined.contains("ipv4.method manual"), "got {joined:?}");
-        assert!(joined.contains("ipv4.addresses 192.168.1.50/24"), "got {joined:?}");
-        assert!(joined.contains("ipv4.gateway 192.168.1.1"), "got {joined:?}");
-        assert!(joined.contains("ipv4.dns 1.1.1.1 8.8.8.8"), "got {joined:?}");
+        assert!(
+            joined.contains("ipv4.addresses 192.168.1.50/24"),
+            "got {joined:?}"
+        );
+        assert!(
+            joined.contains("ipv4.gateway 192.168.1.1"),
+            "got {joined:?}"
+        );
+        assert!(
+            joined.contains("ipv4.dns 1.1.1.1 8.8.8.8"),
+            "got {joined:?}"
+        );
     }
 
     #[test]

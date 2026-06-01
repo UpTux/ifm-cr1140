@@ -9,7 +9,12 @@ pub struct Surface<'a> {
 
 impl<'a> Surface<'a> {
     pub fn new(buf: &'a mut [u8], width: u32, height: u32, stride: u32) -> Self {
-        Self { buf, width, height, stride }
+        Self {
+            buf,
+            width,
+            height,
+            stride,
+        }
     }
 
     /// Byte offset of pixel (x, y); None if out of bounds.

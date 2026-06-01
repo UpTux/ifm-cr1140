@@ -227,7 +227,8 @@ where
         frame[16..20].copy_from_slice(&crc32(&payload).to_le_bytes());
         frame[HEADER_SIZE..].copy_from_slice(&payload);
 
-        self.nvmem.write_at(self.slot_offset(target_index), &frame)?;
+        self.nvmem
+            .write_at(self.slot_offset(target_index), &frame)?;
         Ok(())
     }
 }
@@ -407,6 +408,9 @@ mod tests {
     fn too_small_device_errors() {
         let p = eeprom_path("tiny", 8); // 4-byte slots, < HEADER_SIZE
         let nv = Nvmem::open(&p).unwrap();
-        assert!(matches!(Store::<Settings>::open(nv), Err(SdkError::Retain(_))));
+        assert!(matches!(
+            Store::<Settings>::open(nv),
+            Err(SdkError::Retain(_))
+        ));
     }
 }

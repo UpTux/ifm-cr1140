@@ -67,9 +67,15 @@ mod tests {
             os_release_value(s, "PRETTY_NAME").as_deref(),
             Some("eDB2 ecomatDisplay 2.0.0.11")
         );
-        assert_eq!(os_release_value(s, "VERSION_ID").as_deref(), Some("2.0.0.11"));
+        assert_eq!(
+            os_release_value(s, "VERSION_ID").as_deref(),
+            Some("2.0.0.11")
+        );
         // exact key match: "ID" must not match "VERSION_ID"
-        assert_eq!(os_release_value(s, "ID").as_deref(), Some("edb2-ecomat-display"));
+        assert_eq!(
+            os_release_value(s, "ID").as_deref(),
+            Some("edb2-ecomat-display")
+        );
         assert_eq!(os_release_value(s, "MISSING"), None);
     }
 }

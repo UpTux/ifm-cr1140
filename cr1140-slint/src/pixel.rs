@@ -54,14 +54,24 @@ mod tests {
     fn opaque_blend_replaces_destination() {
         let mut p = Xrgb8888::from_rgb(0, 0, 0);
         // fully opaque red (premultiplied: alpha=255, rgb already *1)
-        p.blend(PremultipliedRgbaColor { red: 200, green: 100, blue: 50, alpha: 255 });
+        p.blend(PremultipliedRgbaColor {
+            red: 200,
+            green: 100,
+            blue: 50,
+            alpha: 255,
+        });
         assert_eq!(p, Xrgb8888::from_rgb(200, 100, 50));
     }
 
     #[test]
     fn transparent_blend_keeps_destination() {
         let mut p = Xrgb8888::from_rgb(10, 20, 30);
-        p.blend(PremultipliedRgbaColor { red: 0, green: 0, blue: 0, alpha: 0 });
+        p.blend(PremultipliedRgbaColor {
+            red: 0,
+            green: 0,
+            blue: 0,
+            alpha: 0,
+        });
         assert_eq!(p, Xrgb8888::from_rgb(10, 20, 30));
     }
 
@@ -69,7 +79,12 @@ mod tests {
     fn half_alpha_blends_halfway() {
         // dst white, src = premultiplied black at alpha 128 (rgb=0) -> ~half white
         let mut p = Xrgb8888::from_rgb(255, 255, 255);
-        p.blend(PremultipliedRgbaColor { red: 0, green: 0, blue: 0, alpha: 128 });
+        p.blend(PremultipliedRgbaColor {
+            red: 0,
+            green: 0,
+            blue: 0,
+            alpha: 128,
+        });
         let (r, g, b) = p.channels();
         assert!((126..=128).contains(&r), "r={r}");
         assert_eq!(r, g);

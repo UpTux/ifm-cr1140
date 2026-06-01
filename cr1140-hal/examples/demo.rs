@@ -24,7 +24,10 @@ fn main() -> std::io::Result<()> {
     let can_iface = args.next().unwrap_or_else(|| "can0".into());
 
     let mut fb = FbDisplay::open("/dev/fb0")?;
-    println!("display {}x{} bpp {}", fb.width, fb.height, fb.bits_per_pixel);
+    println!(
+        "display {}x{} bpp {}",
+        fb.width, fb.height, fb.bits_per_pixel
+    );
 
     match read_temp_c(0) {
         Ok(t) => println!("temp = {t:.1} C"),

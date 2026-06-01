@@ -28,7 +28,11 @@ impl Default for DemoConfig {
     fn default() -> Self {
         // backlight 0 is a sentinel meaning "use mid-brightness on first run"
         // (see load below); color_idx 0 = "off"; led_mode 0 = Solid.
-        Self { backlight: 0, color_idx: 0, led_mode: 0 }
+        Self {
+            backlight: 0,
+            color_idx: 0,
+            led_mode: 0,
+        }
     }
 }
 
@@ -94,7 +98,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let (w, h) = (fb.width as usize, fb.height as usize);
     tracing::info!(
         "display {}x{} bpp {} stride {} ({} buffer(s))",
-        fb.width, fb.height, fb.bits_per_pixel, fb.stride, fb.buffer_count()
+        fb.width,
+        fb.height,
+        fb.bits_per_pixel,
+        fb.stride,
+        fb.buffer_count()
     );
     // Locate the keypad by name; an explicit event node arg still overrides.
     let mut reader = match std::env::args().nth(1) {
@@ -115,7 +123,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         DemoConfig::default()
     });
     // Start from persisted backlight, or mid-brightness on first run.
-    let mut backlight = if cfg.backlight == 0 { bl_max / 2 } else { cfg.backlight.min(bl_max) };
+    let mut backlight = if cfg.backlight == 0 {
+        bl_max / 2
+    } else {
+        cfg.backlight.min(bl_max)
+    };
     let _ = set_backlight(BACKLIGHT, backlight);
 
     // Keypad LED: a base color (Enter cycles PALETTE) × an animation mode (F1–F6).
@@ -179,7 +191,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     ui.set_hostname(hostname().into());
     let model = os_release("PRETTY_NAME").unwrap_or_else(|| "ecomatDisplay".into());
     let build = os_release("BUILD_ID").unwrap_or_default();
-    let subtitle = if build.is_empty() { model } else { format!("{model} · build {build}") };
+    let subtitle = if build.is_empty() {
+        model
+    } else {
+        format!("{model} · build {build}")
+    };
     ui.set_subtitle(subtitle.into());
     // eth0 IP/state is refreshed in the tick below, not once here: at boot the
     // app starts before networking is up, so a one-shot read shows a stale
@@ -214,12 +230,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         update_led_ui(&ui, color_idx, led.mode());
                         save_cfg(&store, backlight, color_idx, &led);
                     }
-                    Button::F1
-                    | Button::F2
-                    | Button::F3
-                    | Button::F4
-                    | Button::F5
-                    | Button::F6 => {
+                    Button::F1 | Button::F2 | Button::F3 | Button::F4 | Button::F5 | Button::F6 => {
                         led.set_mode(match btn {
                             Button::F1 => LedMode::Solid,
                             Button::F2 => LedMode::Dim,

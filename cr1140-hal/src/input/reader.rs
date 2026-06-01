@@ -29,7 +29,9 @@ pub fn find_input_by_name<P: AsRef<Path>>(class_dir: P, target: &str) -> HalResu
             }
         }
     }
-    Err(HalError::DeviceNotFound(format!("input device named {target:?}")))
+    Err(HalError::DeviceNotFound(format!(
+        "input device named {target:?}"
+    )))
 }
 
 /// Reader of logical button events from an evdev node (`/dev/input/eventN`).
@@ -47,7 +49,9 @@ pub struct ButtonReader {
 impl ButtonReader {
     /// Open in blocking mode.
     pub fn open(path: &str) -> HalResult<Self> {
-        Ok(Self { file: File::open(path)? })
+        Ok(Self {
+            file: File::open(path)?,
+        })
     }
 
     /// Open in non-blocking mode (`O_NONBLOCK`) for use with [`poll_button`].
@@ -152,7 +156,10 @@ mod tests {
     fn finds_node_by_name_and_trims_newline() {
         let dir = fake_class_dir(
             "match",
-            &[("event0", Some("snvs-powerkey")), ("event1", Some("ifm-keypad"))],
+            &[
+                ("event0", Some("snvs-powerkey")),
+                ("event1", Some("ifm-keypad")),
+            ],
         );
         assert_eq!(
             find_input_by_name(&dir, "ifm-keypad").unwrap(),

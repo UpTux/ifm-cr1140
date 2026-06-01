@@ -2,8 +2,8 @@
 //! Generic Linux system telemetry from `/proc`. Not CR1140-specific — works on
 //! any Linux host. Pure parsers (host-testable) plus thin procfs readers.
 
-use std::fs;
 use cr1140_hal::sys::{read_temp_c, SOC_THERMAL_ZONE};
+use std::fs;
 
 /// CPU utilisation from `/proc/stat`, computed as the busy fraction between two
 /// samples. The first sample primes the baseline and reports 0%.
@@ -15,7 +15,11 @@ pub struct CpuSampler {
 
 impl CpuSampler {
     pub fn new() -> Self {
-        Self { prev_idle: 0, prev_total: 0, primed: false }
+        Self {
+            prev_idle: 0,
+            prev_total: 0,
+            primed: false,
+        }
     }
 
     /// Read `/proc/stat` and return CPU usage % since the previous call.
@@ -154,12 +158,18 @@ pub struct Telemetry {
 impl Telemetry {
     /// New collector reading the default SoC thermal zone ([`SOC_THERMAL_ZONE`]).
     pub fn new() -> Self {
-        Self { cpu: CpuSampler::new(), soc_zone: SOC_THERMAL_ZONE }
+        Self {
+            cpu: CpuSampler::new(),
+            soc_zone: SOC_THERMAL_ZONE,
+        }
     }
 
     /// New collector reading a specific thermal zone for the SoC temperature.
     pub fn with_soc_zone(zone: u32) -> Self {
-        Self { cpu: CpuSampler::new(), soc_zone: zone }
+        Self {
+            cpu: CpuSampler::new(),
+            soc_zone: zone,
+        }
     }
 
     /// Sample every metric now. The first call primes CPU% and reports 0%.
@@ -247,9 +257,15 @@ mod tests {
 
     #[test]
     fn meminfo_used_percent_matches_helper() {
-        let m = MemInfo { total_kb: 1000, avail_kb: 250 };
+        let m = MemInfo {
+            total_kb: 1000,
+            avail_kb: 250,
+        };
         assert!((m.used_percent() - 75.0).abs() < 0.001);
-        let zero = MemInfo { total_kb: 0, avail_kb: 0 };
+        let zero = MemInfo {
+            total_kb: 0,
+            avail_kb: 0,
+        };
         assert_eq!(zero.used_percent(), 0.0);
     }
 

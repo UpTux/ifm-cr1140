@@ -10,9 +10,9 @@
 pub mod error;
 pub use error::{HalError, HalResult};
 
+pub mod can;
 pub mod display;
 pub mod input;
-pub mod can;
 pub mod sys;
 
 pub mod prelude;

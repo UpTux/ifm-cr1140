@@ -56,7 +56,11 @@ impl Store {
                 name.push(".tmp");
                 self.path.with_file_name(name)
             }
-            None => return Err(SdkError::Io(std::io::Error::from(std::io::ErrorKind::InvalidInput))),
+            None => {
+                return Err(SdkError::Io(std::io::Error::from(
+                    std::io::ErrorKind::InvalidInput,
+                )))
+            }
         };
         {
             let mut f = fs::File::create(&tmp)?;
@@ -93,7 +97,10 @@ mod tests {
         let p = temp_path("roundtrip");
         let _ = fs::remove_file(&p);
         let store = Store::at(&p);
-        let cfg = Cfg { brightness: 200, label: "green".into() };
+        let cfg = Cfg {
+            brightness: 200,
+            label: "green".into(),
+        };
         store.save(&cfg).unwrap();
         let back: Option<Cfg> = store.load().unwrap();
         assert_eq!(back, Some(cfg));
@@ -123,9 +130,17 @@ mod tests {
         let p = temp_path("notmp");
         let _ = fs::remove_file(&p);
         let store = Store::at(&p);
-        store.save(&Cfg { brightness: 1, label: "x".into() }).unwrap();
+        store
+            .save(&Cfg {
+                brightness: 1,
+                label: "x".into(),
+            })
+            .unwrap();
         let tmp = PathBuf::from(format!("{}.tmp", p.display()));
-        assert!(!tmp.exists(), "temp file {tmp:?} should have been renamed away");
+        assert!(
+            !tmp.exists(),
+            "temp file {tmp:?} should have been renamed away"
+        );
         let _ = fs::remove_file(&p);
     }
 
@@ -134,10 +149,26 @@ mod tests {
         let p = temp_path("overwrite");
         let _ = fs::remove_file(&p);
         let store = Store::at(&p);
-        store.save(&Cfg { brightness: 10, label: "old".into() }).unwrap();
-        store.save(&Cfg { brightness: 99, label: "new".into() }).unwrap();
+        store
+            .save(&Cfg {
+                brightness: 10,
+                label: "old".into(),
+            })
+            .unwrap();
+        store
+            .save(&Cfg {
+                brightness: 99,
+                label: "new".into(),
+            })
+            .unwrap();
         let back: Cfg = store.load_or_default().unwrap();
-        assert_eq!(back, Cfg { brightness: 99, label: "new".into() });
+        assert_eq!(
+            back,
+            Cfg {
+                brightness: 99,
+                label: "new".into()
+            }
+        );
         let _ = fs::remove_file(&p);
     }
 

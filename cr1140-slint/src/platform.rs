@@ -15,7 +15,10 @@ pub struct FbPlatform {
 
 impl FbPlatform {
     pub fn new(window: Rc<MinimalSoftwareWindow>) -> Self {
-        Self { window, start: Instant::now() }
+        Self {
+            window,
+            start: Instant::now(),
+        }
     }
 }
 

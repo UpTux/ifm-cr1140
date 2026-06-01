@@ -105,25 +105,54 @@ mod tests {
         let b = raw(EV_KEY, 28, 1);
         assert_eq!(
             InputEvent::decode(&b),
-            Some(InputEvent { type_: 1, code: 28, value: 1 })
+            Some(InputEvent {
+                type_: 1,
+                code: 28,
+                value: 1
+            })
         );
     }
 
     #[test]
     fn key_press_maps_to_pressed_button() {
-        let ev = InputEvent { type_: EV_KEY, code: 28, value: 1 };
-        assert_eq!(to_button_event(ev), Some(ButtonEvent::Pressed(Button::Enter)));
+        let ev = InputEvent {
+            type_: EV_KEY,
+            code: 28,
+            value: 1,
+        };
+        assert_eq!(
+            to_button_event(ev),
+            Some(ButtonEvent::Pressed(Button::Enter))
+        );
     }
 
     #[test]
     fn key_release_maps_to_released_button() {
-        let ev = InputEvent { type_: EV_KEY, code: 59, value: 0 };
+        let ev = InputEvent {
+            type_: EV_KEY,
+            code: 59,
+            value: 0,
+        };
         assert_eq!(to_button_event(ev), Some(ButtonEvent::Released(Button::F1)));
     }
 
     #[test]
     fn autorepeat_and_syn_ignored() {
-        assert_eq!(to_button_event(InputEvent { type_: EV_KEY, code: 28, value: 2 }), None);
-        assert_eq!(to_button_event(InputEvent { type_: 0, code: 0, value: 0 }), None);
+        assert_eq!(
+            to_button_event(InputEvent {
+                type_: EV_KEY,
+                code: 28,
+                value: 2
+            }),
+            None
+        );
+        assert_eq!(
+            to_button_event(InputEvent {
+                type_: 0,
+                code: 0,
+                value: 0
+            }),
+            None
+        );
     }
 }

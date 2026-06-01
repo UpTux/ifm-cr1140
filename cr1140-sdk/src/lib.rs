@@ -34,9 +34,9 @@ pub mod net;
 #[cfg(feature = "retain")]
 pub mod retain;
 
-pub use error::{SdkError, SdkResult};
 #[cfg(feature = "config")]
 pub use config::{Store, DEFAULT_APP_DIR};
+pub use error::{SdkError, SdkResult};
 pub use guard::{ShutdownFlag, ShutdownGuard};
 pub use metrics::{MemInfo, Snapshot, Telemetry};
 #[cfg(feature = "retain")]

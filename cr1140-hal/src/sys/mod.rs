@@ -54,7 +54,10 @@ impl Led {
 
 /// Set an LED brightness via `/sys/class/leds/<name>/brightness`.
 pub fn set_led(name: &str, value: u32) -> HalResult<()> {
-    fs::write(format!("/sys/class/leds/{name}/brightness"), value.to_string())?;
+    fs::write(
+        format!("/sys/class/leds/{name}/brightness"),
+        value.to_string(),
+    )?;
     Ok(())
 }
 
@@ -343,7 +346,10 @@ mod tests {
         fs::create_dir_all(dir.join("red:status")).unwrap();
         let mut names = dir_entry_names(&dir).unwrap();
         names.sort();
-        assert_eq!(names, vec!["green:status".to_string(), "red:status".to_string()]);
+        assert_eq!(
+            names,
+            vec!["green:status".to_string(), "red:status".to_string()]
+        );
         let _ = fs::remove_dir_all(&dir);
     }
 
@@ -387,14 +393,20 @@ mod tests {
         let p = sized_tmp("ror", 16);
         let nv = Nvmem::open(&p).unwrap();
         let mut buf = [0u8; 8];
-        assert!(matches!(nv.read_at(12, &mut buf), Err(HalError::OutOfRange(_))));
+        assert!(matches!(
+            nv.read_at(12, &mut buf),
+            Err(HalError::OutOfRange(_))
+        ));
     }
 
     #[test]
     fn nvmem_write_out_of_range_errs() {
         let p = sized_tmp("wor", 16);
         let nv = Nvmem::open(&p).unwrap();
-        assert!(matches!(nv.write_at(12, &[0u8; 8]), Err(HalError::OutOfRange(_))));
+        assert!(matches!(
+            nv.write_at(12, &[0u8; 8]),
+            Err(HalError::OutOfRange(_))
+        ));
     }
 
     #[test]

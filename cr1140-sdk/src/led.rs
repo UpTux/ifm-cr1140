@@ -87,7 +87,12 @@ pub struct LedDriver {
 impl LedDriver {
     /// New driver: off, solid. No hardware write until the first [`tick`](Self::tick).
     pub fn new() -> Self {
-        Self { color: (0, 0, 0), mode: LedMode::Solid, mode_start: Instant::now(), last: None }
+        Self {
+            color: (0, 0, 0),
+            mode: LedMode::Solid,
+            mode_start: Instant::now(),
+            last: None,
+        }
     }
 
     /// Set the base color (does not restart the animation phase).
@@ -143,8 +148,14 @@ mod tests {
     #[test]
     fn pulse_breathes_from_zero_to_one() {
         assert!(LedMode::Pulse.level(0.0).abs() < 0.001, "starts dark");
-        assert!((LedMode::Pulse.level(1.0) - 1.0).abs() < 0.001, "peaks mid-cycle");
-        assert!(LedMode::Pulse.level(2.0).abs() < 0.001, "dark again after 2s");
+        assert!(
+            (LedMode::Pulse.level(1.0) - 1.0).abs() < 0.001,
+            "peaks mid-cycle"
+        );
+        assert!(
+            LedMode::Pulse.level(2.0).abs() < 0.001,
+            "dark again after 2s"
+        );
     }
 
     #[test]
