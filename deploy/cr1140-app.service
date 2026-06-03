@@ -1,10 +1,10 @@
 [Unit]
-Description=CR1140 native Rust app
+Description=CR1140 baler demo (operator panel)
 After=multi-user.target
 
 [Service]
 Type=simple
-ExecStart=/home/cds-apps/cr1140-slint-demo /dev/input/event1
+ExecStart=/home/cds-apps/cr1140-baler-demo /dev/input/event1
 Restart=on-failure
 RestartSec=2
 
