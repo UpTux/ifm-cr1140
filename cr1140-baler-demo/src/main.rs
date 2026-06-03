@@ -444,12 +444,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     ui.set_iso("ISO".into());
 
     // Home-menu labels come from the router (single source of truth for order).
-    let entries = Router::menu_entries();
-    ui.set_menu1(entries[0].into());
-    ui.set_menu2(entries[1].into());
-    ui.set_menu3(entries[2].into());
-    ui.set_menu4(entries[3].into());
-    ui.set_menu5(entries[4].into());
+    // The .slint side renders these via a Repeater over a model, so push the
+    // whole list once at startup; the cursor (menu-cursor) is updated in refresh.
+    let entries: Vec<slint::SharedString> = Router::menu_entries()
+        .iter()
+        .map(|&s| slint::SharedString::from(s))
+        .collect();
+    ui.set_menu_entries(slint::ModelRc::new(slint::VecModel::from(entries)));
 
     // --- retain: reflash-surviving lifetime total on the SPI EEPROM ---
     // The demo owns the whole retain region (sole `BalerRetain` blob). If the
