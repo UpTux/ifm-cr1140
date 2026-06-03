@@ -22,7 +22,8 @@ sections by running `scripts/cr1140-recon.sh` on the device (Task 0.2).
 - `ifm-overlay.sh`: mounts **`/dev/mmcblk0p2`** at `/overlay`, builds an
   overlayfs with `lowerdir=/` (read-only rootfs from p1) +
   `upperdir=/overlay/root/upper`, `pivot_root`s into it, then `exec`s
-  `/bin/ifm-splash` → `/lib/systemd/systemd`.
+  `/bin/ifm-splash` → `/bin/dietsplash` → `/lib/systemd/systemd`
+  (boot splash — see *Boot splash / logo*).
 - **Consequence:** `/` is a writable overlay. Files written under `/` (e.g.
   `/home/cds-apps`, `/usr/local/bin`) **persist** via the p2 upper layer.
 - eMMC partition roles (revised from earlier guess):
@@ -31,6 +32,46 @@ sections by running `scripts/cr1140-recon.sh` on the device (Task 0.2).
   - `p3` = role unconfirmed; not in `/etc/fstab`. **[live]** — check `mount`/`df`.
 - U-Boot env lives in `mmcblk0boot0/1` (`/etc/fw_env.config`); `fw_setenv` can
   set `ifm_boot_backlight`, `ifm_orientation`, `ifm_boot_status_led`.
+
+## Boot splash / logo  [live ✓ — 2026-06-03]
+
+The ifm logo shown during boot is drawn by **dietsplash** (a lightweight Yocto
+boot-splash), *before* systemd starts:
+
+```
+kernel  init=/sbin/ifm-overlay.sh setup
+ └─ /sbin/ifm-overlay.sh   → mount p2 overlay, pivot_root, then: exec /bin/ifm-splash
+     └─ /bin/ifm-splash    → set backlight (ifm_boot_backlight, default 400), then: exec /bin/dietsplash
+         └─ /bin/dietsplash → blit the splash to /dev/fb0, then exec /lib/systemd/systemd
+```
+
+- dietsplash stays up until **`dietsplash-quit.service`** runs `dietsplashctl 100 ""`
+  (ordered `Before=getty@tty1 display-manager`).
+- **The splash image is one file:** `/usr/share/dietsplash/background.ppm`
+  (binary **P6 PPM**, "Created by GIMP", ~419 KB; fallback `default_background.ppm`).
+  `dietsplash` links only libc and reads exactly that path (confirmed via its
+  strings) and **centers** the image on the visible resolution.
+- **`/usr/lib/libifm_boot_logo.so`** (Rust; exports `IfmLogo_store` /
+  `IfmLogo_storeWithSize`; bundles png/jpeg/bmp/webp/exr/tiff decoders; writes
+  `/dev/fb0`) is ifm's **separate** "install a custom boot logo" API. dietsplash
+  does **not** use it — it's a vendor tool that decodes a normal image into the
+  dietsplash PPM. This is the "official" path if a CLI front-end exists.
+- The **launcher / setup screen** is `/usr/bin/ifm-local-setup`, started by
+  `app-launcher.service` → `/opt/ifm/app-launcher/run-app.sh` (which runs
+  `ifm-local-setup` when the kernel cmdline contains `setup` — it does).
+  `deploy/install.sh` **masks** `app-launcher.service`, so the launcher never
+  appears once our app owns `/dev/fb0`. (`/bin/ifm-splash` is a 5-line shell
+  script; `/usr/bin/ifm-splash-ctl.sh` is a near-empty stub.)
+
+**To replace the boot logo:**
+- Simplest — overwrite `/usr/share/dietsplash/background.ppm` with a custom
+  **800×480 binary P6 PPM** (back up the original first), e.g.
+  `convert logo.png -resize 800x480 -background black -gravity center -extent 800x480 out.ppm`
+  (ensure P6/binary). Shows on the next boot.
+- Official — feed a PNG/JPEG through `libifm_boot_logo` (`IfmLogo_store`).
+- **Persistence:** `/usr` is the p2 overlay, so a swapped `.ppm` survives normal
+  reboots but a **`.swu` reflash wipes p1+p2** and reverts it (see *Firmware
+  update*). For permanence, bake it into the image or re-apply post-update.
 
 ## CODESYS launch (service to disable)  [offline ✓]
 
