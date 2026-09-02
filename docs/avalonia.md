@@ -49,15 +49,21 @@ verified on device.
 
 - **`enum KeypadKey`**: `F1`, `F2`, `F3`, `F4`, `F5`, `F6`, `Up`, `Down`, `Left`,
   `Right`, `Enter`.
-- **`sealed class EvdevKeypadInput : IInputBackend, IDisposable`**: 
-  - Constructor: `EvdevKeypadInput(string devicePath)` (e.g. `"/dev/input/event1"`).
-  - Event: `Action<KeypadKey>? KeyPressed` (raised on a background thread when a key is
-    pressed).
+- **`sealed class EvdevKeypadInput : IInputBackend, IDisposable`**:
+  - Constructors: `EvdevKeypadInput(string devicePath)` (e.g. `"/dev/input/event1"`) and
+    `EvdevKeypadInput(string devicePath, KeyGestureOptions?)` for custom gesture timing.
+  - Events (all `Action<KeypadKey>?`, raised on background threads): `KeyPressed` (key-down),
+    `KeyReleased` (key-up), `KeyTapped` (short press), `KeyDoubleTapped` (two quick taps),
+    `KeyHeld` (long-press, one-shot), `KeyHolding` (press-and-hold repeat).
   - Methods: `Initialize(IScreenInfoProvider, Action<RawInputEventArgs>)` (starts evdev
-    reader thread), `SetInputRoot(IInputRoot)`, `Dispose()` (stops thread).
+    reader thread + gesture timer), `SetInputRoot(IInputRoot)`, `Dispose()` (stops both).
+- **`sealed class KeyGestureDetector`** / **`sealed class KeyGestureOptions`**: the pure,
+  host-testable gesture state machine and its timing knobs (`HoldThreshold` 500 ms,
+  `HoldRepeatInterval` 150 ms, `DoubleTapWindow` 300 ms).
 
-Reads 24-byte `input_event` records from the evdev node, filters `EV_KEY` type=1
-value=1 (key-DOWN), and maps codes 59..64, 103, 105, 106, 108, 28 to `KeypadKey`.
+Reads 24-byte `input_event` records from the evdev node, raises `KeyPressed`/`KeyReleased`
+for `EV_KEY` values 1/0 (auto-repeat value 2 ignored; holding is timer-driven), and maps
+codes 59..64, 103, 105, 106, 108, 28 to `KeypadKey`.
 Verified on CR1140/CR1141 (aarch64 glibc 2.35, gpio-keys keypad). See
 [`cr1140-avalonia/README.md`](../cr1140-avalonia/README.md) for the full
 `SoftKeyFooter` API (styling properties, XAML usage).

@@ -11,19 +11,24 @@ namespace Cr1140.Avalonia.Input;
 /// <summary>
 /// An Avalonia <see cref="IInputBackend"/> that reads the CR1140/CR1141 gpio-keys
 /// keypad from an evdev device node (default <c>/dev/input/event1</c>) and raises
-/// <see cref="KeyPressed"/> for each key-press.
+/// managed key events: <see cref="KeyPressed"/> and <see cref="KeyReleased"/> for raw
+/// down/up, plus the derived gestures <see cref="KeyTapped"/>, <see cref="KeyDoubleTapped"/>,
+/// <see cref="KeyHeld"/> (long-press), and <see cref="KeyHolding"/> (press-and-hold repeat).
 /// </summary>
 /// <remarks>
 /// Avalonia's stock LinuxFramebuffer input (LibInput / EvDev) delivers only
 /// touch/pointer events, so a keypad-only panel needs this. Pass an instance as the
 /// <c>inputBackend</c> argument of <c>StartLinuxFbDev</c>/<c>StartLinuxDrm</c> and
-/// drive your UI from <see cref="KeyPressed"/> (marshal to the UI thread with
-/// <c>Dispatcher.UIThread.Post</c>).
+/// drive your UI from the events (marshal to the UI thread with
+/// <c>Dispatcher.UIThread.Post</c>). Gesture timing is configurable via
+/// <see cref="KeyGestureOptions"/>; every event fires on a background thread.
 /// </remarks>
 public sealed class EvdevKeypadInput : IInputBackend, IDisposable
 {
     private const int EventSize = 24;
     private const ushort EvKey = 1;
+    // Cadence of the gesture clock while a key is active; drives hold-repeat and tap resolution.
+    private const int TickIntervalMs = 25;
 
     private static readonly IReadOnlyDictionary<ushort, KeypadKey> KeycodeMap = new Dictionary<ushort, KeypadKey>
     {
@@ -42,26 +47,59 @@ public sealed class EvdevKeypadInput : IInputBackend, IDisposable
 
     private readonly string _devicePath;
     private readonly CancellationTokenSource _cts = new();
+    private readonly KeyGestureDetector _gestures;
+    private readonly object _gate = new();
 
     private Thread? _readerThread;
     private FileStream? _stream;
+    private Timer? _tickTimer;
     private IInputRoot? _inputRoot;
     private Action<RawInputEventArgs>? _onInput; // Future text-entry could dispatch RawKeyEventArgs via this
 
     /// <summary>Raised on the reader thread when a mapped key is pressed (evdev value 1).</summary>
     public event Action<KeypadKey>? KeyPressed;
 
-    /// <summary>Creates a backend bound to an evdev device node.</summary>
+    /// <summary>Raised on the reader thread when a mapped key is released (evdev value 0).</summary>
+    public event Action<KeypadKey>? KeyReleased;
+
+    /// <summary>Raised for a completed short press with no second tap inside the double-tap window.</summary>
+    public event Action<KeypadKey>? KeyTapped;
+
+    /// <summary>Raised when two taps of the same key complete within the double-tap window.</summary>
+    public event Action<KeypadKey>? KeyDoubleTapped;
+
+    /// <summary>Raised once when a key has stayed down past the hold threshold.</summary>
+    public event Action<KeypadKey>? KeyHeld;
+
+    /// <summary>Raised repeatedly (press-and-hold auto-repeat) while a key stays down after <see cref="KeyHeld"/>.</summary>
+    public event Action<KeypadKey>? KeyHolding;
+
+    /// <summary>Creates a backend bound to an evdev device node with default gesture timing.</summary>
     /// <param name="devicePath">The evdev node to read, e.g. <c>/dev/input/event1</c>.</param>
-    public EvdevKeypadInput(string devicePath)
+    public EvdevKeypadInput(string devicePath) : this(devicePath, null)
+    {
+    }
+
+    /// <summary>Creates a backend bound to an evdev device node with custom gesture timing.</summary>
+    /// <param name="devicePath">The evdev node to read, e.g. <c>/dev/input/event1</c>.</param>
+    /// <param name="gestureOptions">Tap/double-tap/hold thresholds, or null for defaults.</param>
+    public EvdevKeypadInput(string devicePath, KeyGestureOptions? gestureOptions)
     {
         _devicePath = devicePath;
+        _gestures = new KeyGestureDetector(gestureOptions);
+        _gestures.Tapped += k => KeyTapped?.Invoke(k);
+        _gestures.DoubleTapped += k => KeyDoubleTapped?.Invoke(k);
+        _gestures.Held += k => KeyHeld?.Invoke(k);
+        _gestures.Holding += k => KeyHolding?.Invoke(k);
     }
 
     /// <summary>Called by the Avalonia LinuxFramebuffer platform; starts the evdev reader thread.</summary>
     public void Initialize(IScreenInfoProvider info, Action<RawInputEventArgs> onInput)
     {
         _onInput = onInput;
+
+        // Stopped until a key press; a down-event arms it, OnTick disarms it once idle.
+        _tickTimer = new Timer(OnTick, null, Timeout.Infinite, Timeout.Infinite);
 
         _readerThread = new Thread(ReaderLoop)
         {
@@ -109,10 +147,26 @@ public sealed class EvdevKeypadInput : IInputBackend, IDisposable
                 ushort code = BitConverter.ToUInt16(buffer, 18);
                 int value = BitConverter.ToInt32(buffer, 20);
 
-                // Only process key-down events (EV_KEY type=1, value=1)
-                if (type == EvKey && value == 1 && KeycodeMap.TryGetValue(code, out var key))
+                // EV_KEY value 1 = down, 0 = up, 2 = auto-repeat (ignored; holding is timer-driven).
+                if (type == EvKey && KeycodeMap.TryGetValue(code, out var key))
                 {
-                    KeyPressed?.Invoke(key);
+                    if (value == 1)
+                    {
+                        KeyPressed?.Invoke(key);
+                        lock (_gate)
+                        {
+                            _gestures.Down(key, Environment.TickCount64);
+                            _tickTimer?.Change(TickIntervalMs, TickIntervalMs);
+                        }
+                    }
+                    else if (value == 0)
+                    {
+                        KeyReleased?.Invoke(key);
+                        lock (_gate)
+                        {
+                            _gestures.Up(key, Environment.TickCount64);
+                        }
+                    }
                 }
             }
         }
@@ -126,10 +180,22 @@ public sealed class EvdevKeypadInput : IInputBackend, IDisposable
         }
     }
 
-    /// <summary>Stops the reader thread and closes the device node.</summary>
+    // Gesture clock: fires while a key is active, disarms itself once the detector is idle.
+    private void OnTick(object? state)
+    {
+        lock (_gate)
+        {
+            _gestures.Tick(Environment.TickCount64);
+            if (_gestures.IsIdle)
+                _tickTimer?.Change(Timeout.Infinite, Timeout.Infinite);
+        }
+    }
+
+    /// <summary>Stops the reader thread, the gesture timer, and closes the device node.</summary>
     public void Dispose()
     {
         _cts.Cancel();
+        _tickTimer?.Dispose();
         _stream?.Close();
         _readerThread?.Join();
         _cts.Dispose();

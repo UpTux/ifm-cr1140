@@ -42,6 +42,14 @@ public sealed class MainViewModel : ViewModelBase
         // Subscribe to keypad input (dispatched to UI thread)
         _keypad.KeyPressed += OnKeyPressed;
 
+        // Mirror every keypad event into the Key Events demo screen.
+        _keypad.KeyReleased += k => RecordKeyEvent(KeyEventKind.Released, k);
+        _keypad.KeyPressed += k => RecordKeyEvent(KeyEventKind.Pressed, k);
+        _keypad.KeyTapped += k => RecordKeyEvent(KeyEventKind.Tapped, k);
+        _keypad.KeyDoubleTapped += k => RecordKeyEvent(KeyEventKind.DoubleTapped, k);
+        _keypad.KeyHeld += k => RecordKeyEvent(KeyEventKind.Held, k);
+        _keypad.KeyHolding += k => RecordKeyEvent(KeyEventKind.Holding, k);
+
         // Initialize to Menu screen
         _nav.Initialize();
     }
@@ -82,6 +90,10 @@ public sealed class MainViewModel : ViewModelBase
         var logical = SoftKeyLayoutMap.ToLogical(key, _footerLayout);
         Dispatcher.UIThread.Post(() => _nav.Handle(logical));
     }
+
+    /// <summary>Forward a keypad event to the Key Events demo VM (on the UI thread).</summary>
+    private void RecordKeyEvent(KeyEventKind kind, KeypadKey key)
+        => Dispatcher.UIThread.Post(() => _nav.KeyEvents.Record(kind, key));
 
     /// <summary>
     /// Called by NavigationController to update the screen state.

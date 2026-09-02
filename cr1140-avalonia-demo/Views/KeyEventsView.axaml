@@ -1,0 +1,96 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:vm="using:Cr1140.AvaloniaDemo.ViewModels"
+             xmlns:views="using:Cr1140.AvaloniaDemo.Views"
+             mc:Ignorable="d" d:DesignWidth="800" d:DesignHeight="480"
+             x:Class="Cr1140.AvaloniaDemo.Views.KeyEventsView"
+             x:CompileBindings="True"
+             x:DataType="vm:KeyEventsViewModel">
+
+  <UserControl.Resources>
+    <views:HexToBrushConverter x:Key="HexToBrush"/>
+    <views:BoolToRecentThicknessConverter x:Key="RecentThickness"/>
+  </UserControl.Resources>
+
+  <Grid RowDefinitions="Auto,Auto,*" Margin="24,14">
+
+    <!-- Instruction -->
+    <TextBlock Grid.Row="0"
+               Text="Tap, double-tap or hold any key to see its events (F6 = Back)."
+               FontSize="15"
+               Foreground="#888888"
+               HorizontalAlignment="Center"
+               Margin="0,0,0,10"/>
+
+    <!-- Event-type cards: 3 columns × 2 rows -->
+    <ItemsControl Grid.Row="1" ItemsSource="{Binding Rows}" Height="176">
+      <ItemsControl.ItemsPanel>
+        <ItemsPanelTemplate>
+          <UniformGrid Columns="3" Rows="2"/>
+        </ItemsPanelTemplate>
+      </ItemsControl.ItemsPanel>
+      <ItemsControl.ItemTemplate>
+        <DataTemplate x:DataType="vm:KeyEventRow">
+          <Border Background="#141414"
+                  BorderBrush="{Binding Color, Converter={StaticResource HexToBrush}}"
+                  BorderThickness="{Binding IsRecent, Converter={StaticResource RecentThickness}}"
+                  CornerRadius="6"
+                  Margin="4"
+                  Padding="12,8">
+            <Grid RowDefinitions="Auto,*,Auto">
+              <TextBlock Grid.Row="0"
+                         Text="{Binding Name}"
+                         FontSize="15"
+                         FontWeight="SemiBold"
+                         Foreground="{Binding Color, Converter={StaticResource HexToBrush}}"/>
+              <TextBlock Grid.Row="1"
+                         Text="{Binding LastKey}"
+                         FontSize="34"
+                         FontWeight="Bold"
+                         Foreground="#e0e0e0"
+                         HorizontalAlignment="Center"
+                         VerticalAlignment="Center"/>
+              <TextBlock Grid.Row="2"
+                         Text="{Binding Count, StringFormat='{}{0}×'}"
+                         FontSize="14"
+                         Foreground="#777777"
+                         HorizontalAlignment="Right"/>
+            </Grid>
+          </Border>
+        </DataTemplate>
+      </ItemsControl.ItemTemplate>
+    </ItemsControl>
+
+    <!-- Rolling event log -->
+    <Border Grid.Row="2"
+            Background="#141414"
+            BorderBrush="#333333"
+            BorderThickness="1"
+            CornerRadius="6"
+            Margin="4,10,4,0"
+            Padding="14,8">
+      <Grid RowDefinitions="Auto,*">
+        <TextBlock Grid.Row="0"
+                   Text="EVENT LOG"
+                   FontSize="12"
+                   FontWeight="SemiBold"
+                   Foreground="#666666"
+                   Margin="0,0,0,6"/>
+        <ItemsControl Grid.Row="1" ItemsSource="{Binding Log}">
+          <ItemsControl.ItemTemplate>
+            <DataTemplate x:DataType="x:String">
+              <TextBlock Text="{Binding}"
+                         FontSize="14"
+                         Foreground="#bbbbbb"
+                         Margin="0,1"/>
+            </DataTemplate>
+          </ItemsControl.ItemTemplate>
+        </ItemsControl>
+      </Grid>
+    </Border>
+
+  </Grid>
+
+</UserControl>

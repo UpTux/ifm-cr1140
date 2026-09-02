@@ -12,20 +12,20 @@
   <PropertyGroup>
     <IsPackable>true</IsPackable>
     <PackageId>Cr1140.Avalonia</PackageId>
-    <Version>0.3.0</Version>
+    <Version>0.5.0</Version>
     <Authors>Patrick Dahlke</Authors>
     <Company>UpTux UG (haftungsbeschränkt)</Company>
     <Product>Cr1140.Avalonia</Product>
     <Title>Avalonia keypad input for the ifm CR1140 / CR1141</Title>
-    <Description>Avalonia LinuxFramebuffer support for the ifm CR1140/CR1141 (ecomatDisplay 4.3", NXP i.MX 8M Nano / aarch64): a custom IInputBackend (EvdevKeypadInput) that reads the gpio-keys keypad from /dev/input/event1 (evdev) — Avalonia's built-in LinuxFramebuffer input handles touch/pointer only, so keypad-only SKUs need this — plus a SoftKeyFooter control with physical-keypad or natural (F1..F6) ordering. Dual-licensed: GPL-3.0-only, or commercial from UpTux UG.</Description>
+    <Description>Avalonia LinuxFramebuffer support for the ifm CR1140/CR1141 (ecomatDisplay 4.3", NXP i.MX 8M Nano / aarch64): a custom IInputBackend (EvdevKeypadInput) that reads the gpio-keys keypad from /dev/input/event1 (evdev) — Avalonia's built-in LinuxFramebuffer input handles touch/pointer only, so keypad-only SKUs need this — a SoftKeyFooter control with physical-keypad or natural (F1..F6) ordering, and a framework-agnostic SystemTelemetry collector (CPU, memory, SoC/board temperature, uptime, load) plus DeviceInfo (hostname, os-release, eth0/can0 state) read from /proc and sysfs. Dual-licensed: GPL-3.0-only, or commercial from UpTux UG.</Description>
     <Copyright>Copyright (C) 2026 Patrick Dahlke / UpTux UG (haftungsbeschränkt)</Copyright>
     <PackageLicenseExpression>GPL-3.0-only</PackageLicenseExpression>
     <PackageProjectUrl>https://github.com/UpTux/ifm-cr1140</PackageProjectUrl>
     <RepositoryUrl>https://github.com/UpTux/ifm-cr1140</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
     <PackageReadmeFile>README.md</PackageReadmeFile>
-    <PackageTags>cr1140;cr1141;ifm;ecomatdisplay;avalonia;linuxframebuffer;fbdev;evdev;keypad;softkey;embedded;aarch64;imx8mn</PackageTags>
-    <PackageReleaseNotes>0.3.0 — SoftKeyFooter Natural layout centres the d-pad; add SoftKeyLayoutMap.ToLogical (hardware→logical key remap). 0.2.0 — add SoftKeyFooter (Physical/Natural layout). 0.1.0 — EvdevKeypadInput (IInputBackend) + KeypadKey.</PackageReleaseNotes>
+    <PackageTags>cr1140;cr1141;ifm;ecomatdisplay;avalonia;linuxframebuffer;fbdev;evdev;keypad;gestures;softkey;telemetry;metrics;procfs;embedded;aarch64;imx8mn</PackageTags>
+    <PackageReleaseNotes>0.5.0 — EvdevKeypadInput now raises KeyReleased (evdev key-up) and derived gestures KeyTapped, KeyDoubleTapped, KeyHeld (long-press), and KeyHolding (press-and-hold auto-repeat), configurable via new KeyGestureOptions; add the pure, host-testable KeyGestureDetector state machine. KeyPressed is unchanged. 0.4.0 — add SystemTelemetry (CPU/memory/SoC+board temp/uptime/load from /proc + thermal sysfs), MemInfo, TelemetrySnapshot, CpuSampler, ProcFs parsers, and DeviceInfo (hostname/os-release/operstate/IPv4) — a readable, framework-agnostic telemetry API (not a control). 0.3.0 — SoftKeyFooter Natural layout centres the d-pad; add SoftKeyLayoutMap.ToLogical (hardware→logical key remap). 0.2.0 — add SoftKeyFooter (Physical/Natural layout). 0.1.0 — EvdevKeypadInput (IInputBackend) + KeypadKey.</PackageReleaseNotes>
     <IncludeSymbols>true</IncludeSymbols>
     <SymbolPackageFormat>snupkg</SymbolPackageFormat>
     <PublishRepositoryUrl>true</PublishRepositoryUrl>

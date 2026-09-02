@@ -17,6 +17,7 @@ public sealed class NavigationController
     private readonly WrappingViewModel _wrapping;
     private readonly TelemetryViewModel _telemetry;
     private readonly SettingsViewModel _settings;
+    private readonly KeyEventsViewModel _keyEvents;
 
     private Screen _current;
 
@@ -30,11 +31,15 @@ public sealed class NavigationController
         _wrapping = new WrappingViewModel();
         _telemetry = new TelemetryViewModel();
         _settings = new SettingsViewModel();
+        _keyEvents = new KeyEventsViewModel();
 
         _current = Screen.Menu;
     }
 
     public Screen Current => _current;
+
+    /// <summary>The long-lived Key Events demo VM; MainViewModel feeds it every keypad event.</summary>
+    public KeyEventsViewModel KeyEvents => _keyEvents;
 
     public void Handle(KeypadKey key)
     {
@@ -107,12 +112,16 @@ public sealed class NavigationController
                 break;
 
             case Screen.Telemetry:
-                // No actions on Telemetry
+                if (key == KeypadKey.Up) _telemetry.ScrollUp();
+                else if (key == KeypadKey.Down) _telemetry.ScrollDown();
                 break;
 
             case Screen.Settings:
                 if (key == KeypadKey.F1) _settings.ToggleFieldbus();
                 else if (key == KeypadKey.F2) _main.ToggleFooterLayout();
+                break;
+            case Screen.KeyEvents:
+                // No per-key actions — every press is surfaced by the KeyEvents demo screen.
                 break;
         }
     }
@@ -120,6 +129,9 @@ public sealed class NavigationController
     private void OpenScreen(Screen screen)
     {
         _current = screen;
+        // Start each visit to the demo screen from a clean slate.
+        if (screen == Screen.KeyEvents)
+            _keyEvents.Reset();
 
         // Update MainViewModel state
         _main.UpdateScreen(
@@ -139,6 +151,7 @@ public sealed class NavigationController
             3 => Screen.Wrapping,
             4 => Screen.Telemetry,
             5 => Screen.Settings,
+            6 => Screen.KeyEvents,
             _ => Screen.Menu
         };
     }
@@ -153,6 +166,7 @@ public sealed class NavigationController
             Screen.Knives => "Knives",
             Screen.Wrapping => "Wrapping",
             Screen.Telemetry => "Telemetry",
+            Screen.KeyEvents => "Key Events",
             Screen.Settings => "Settings",
             _ => "Baler"
         };
@@ -169,6 +183,7 @@ public sealed class NavigationController
             Screen.Wrapping => _wrapping,
             Screen.Telemetry => _telemetry,
             Screen.Settings => _settings,
+            Screen.KeyEvents => _keyEvents,
             _ => _menu
         };
     }
@@ -198,6 +213,7 @@ public sealed class NavigationController
             Screen.Wrapping => new[] { "Start", "", "", "", "", "Back" },
             Screen.Telemetry => new[] { "", "", "", "", "", "Back" },
             Screen.Settings => new[] { "Toggle Bus", "Footer", "", "", "", "Back" },
+            Screen.KeyEvents => new[] { "", "", "", "", "", "Back" },
             _ => new[] { "", "", "", "", "", "" }
         };
     }

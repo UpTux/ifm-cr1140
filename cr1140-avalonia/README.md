@@ -1,12 +1,12 @@
 # Cr1140.Avalonia
 
-Custom Avalonia LinuxFramebuffer components for keypad-only embedded panels: evdev input backend + soft-key footer control.
+Custom Avalonia LinuxFramebuffer components for keypad-only embedded panels: evdev input backend, soft-key footer control, and a readable system-telemetry API.
 
 ## What & Why
 
 Avalonia's built-in LinuxFramebuffer input (`LibInput` / `EvDev`) provides **touch and pointer input only** — no keyboard or keypad support. The ifm CR1140/CR1141 ecomatDisplay (4.3", i.MX 8M Nano, 800×480 fbdev) is available as a **keypad-only SKU** (no touchscreen), which means a headless-framebuffer Avalonia UI cannot receive input from the device's gpio-keys keypad using the stock input backend.
 
-**Cr1140.Avalonia** (v0.3.0) provides a custom `IInputBackend` implementation that directly reads the keypad from `/dev/input/event1` via Linux evdev, maps the raw keycodes to a typed `KeypadKey` enum (F1–F6, arrow keys, Enter), and raises a managed `KeyPressed` event for application-driven navigation. It also includes a **`SoftKeyFooter`** control — a 6-key soft-key footer with two layout modes (Physical and Natural) for operator-panel UIs. Both components have been **verified on real CR1140 hardware** rendering to `/dev/fb0` and receiving physical keypad input.
+**Cr1140.Avalonia** (v0.5.0) provides a custom `IInputBackend` implementation that directly reads the keypad from `/dev/input/event1` via Linux evdev, maps the raw keycodes to a typed `KeypadKey` enum (F1–F6, arrow keys, Enter), and raises managed events for application-driven navigation: `KeyPressed` and `KeyReleased` for raw down/up, plus the derived gestures `KeyTapped`, `KeyDoubleTapped`, `KeyHeld` (long-press), and `KeyHolding` (press-and-hold auto-repeat). It also includes a **`SoftKeyFooter`** control — a 6-key soft-key footer with two layout modes (Physical and Natural) for operator-panel UIs — and a framework-agnostic **`SystemTelemetry`** collector for CPU / memory / temperature / uptime / load and **`DeviceInfo`** for OS identity and network state. The input and soft-key components have been **verified on real CR1140 hardware** rendering to `/dev/fb0` and receiving physical keypad input.
 
 ## Install
 
@@ -102,7 +102,39 @@ The evdev keycodes from the CR1140/CR1141 gpio-keys device are mapped as follows
 | 106       | `Right`   |
 | 28        | `Enter`   |
 
-Only **key-down** events (`EV_KEY`, value `1`) are raised; key-up events are ignored.
+`KeyPressed` fires on **key-down** (`EV_KEY`, value `1`) and `KeyReleased` on **key-up** (value `0`); kernel auto-repeat (value `2`) is ignored. See **Key events & gestures** below for the higher-level events built on top of these.
+
+## Key events & gestures
+
+`EvdevKeypadInput` exposes six `event Action<KeypadKey>?` events. All fire on background threads — marshal to the UI thread with `Dispatcher.UIThread.Post`.
+
+| Event | Fires when |
+|-------|-----------|
+| `KeyPressed` | A key goes down (evdev value `1`). |
+| `KeyReleased` | A key comes up (evdev value `0`). |
+| `KeyTapped` | A short press-and-release completes with no second tap inside the double-tap window. |
+| `KeyDoubleTapped` | Two taps of the same key complete within `DoubleTapWindow`. |
+| `KeyHeld` | A key stays down past `HoldThreshold` (fires once — long-press). |
+| `KeyHolding` | Repeats every `HoldRepeatInterval` while the key stays down after `KeyHeld` (press-and-hold auto-repeat). |
+
+Gesture timing is configurable via `KeyGestureOptions` (defaults: `HoldThreshold` 500 ms, `HoldRepeatInterval` 150 ms, `DoubleTapWindow` 300 ms):
+
+```csharp
+var keypad = new EvdevKeypadInput("/dev/input/event1", new KeyGestureOptions
+{
+    HoldThreshold = TimeSpan.FromMilliseconds(400),
+    HoldRepeatInterval = TimeSpan.FromMilliseconds(120),
+    DoubleTapWindow = TimeSpan.FromMilliseconds(250),
+});
+
+keypad.KeyTapped       += k => Dispatcher.UIThread.Post(() => OnTap(k));
+keypad.KeyDoubleTapped += k => Dispatcher.UIThread.Post(() => OnDoubleTap(k));
+keypad.KeyHeld         += k => Dispatcher.UIThread.Post(() => OnHoldStart(k));
+keypad.KeyHolding      += k => Dispatcher.UIThread.Post(() => OnHoldRepeat(k)); // e.g. increment a value
+keypad.KeyReleased     += k => Dispatcher.UIThread.Post(() => OnRelease(k));
+```
+
+The gesture logic lives in `KeyGestureDetector` — a pure, allocation-free, host-testable state machine driven by monotonic timestamps (`Down`/`Up`/`Tick`). Auto-repeat is derived by the library's own timer, so **holding works whether or not the gpio-keys kernel autorepeat is enabled**.
 
 
 ## SoftKeyFooter control
@@ -195,6 +227,46 @@ All styling properties are overridable to match your application's theme. The de
 
 **Verified on real CR1140 hardware** with both Physical and Natural layout modes.
 
+## Telemetry (system metrics)
+
+`SystemTelemetry` is a **plain, framework-agnostic collector** — not a control. Hold
+one instance and call `Sample()` on whatever cadence you like (a 1 Hz
+`DispatcherTimer` is typical); each call returns a `TelemetrySnapshot`. Every field
+is independently optional (`double?` / `MemInfo?`), so a missing `/proc` file or
+thermal zone never throws — it just yields `null` for that field. Because it keeps
+CPU-sampler state between calls, **reuse the same instance** rather than
+constructing one per sample; the first call primes the CPU baseline and reports 0%.
+
+```csharp
+using Cr1140.Avalonia.Telemetry;
+
+var telemetry = new SystemTelemetry();      // SoC thermal zone 0 by default
+
+// ...on a 1 Hz timer, on the thread of your choice:
+TelemetrySnapshot s = telemetry.Sample();
+
+string cpu = s.CpuPercent is double c ? $"{c:F0} %" : "—";
+string mem = s.Memory is MemInfo m ? $"{m.UsedPercent:F0} % of {m.TotalKb / 1024} MB" : "—";
+string soc = s.SocTempC is double t ? $"{t:F1} °C" : "—";
+string up  = s.UptimeSeconds is double u ? ProcFs.FormatUptime(u) : "—";
+```
+
+### Namespace: `Cr1140.Avalonia.Telemetry`
+
+| Type | Role |
+|------|------|
+| `SystemTelemetry` | Pull-based collector; `Sample()` → `TelemetrySnapshot`. Ctor takes an optional SoC thermal-zone number (`DefaultSocThermalZone` = 0). Holds CPU-sampler state; no threads, no timers. |
+| `TelemetrySnapshot` | One point-in-time read: `CpuPercent`, `Memory`, `SocTempC`, `BoardTempC`, `UptimeSeconds`, `Load1` — each independently optional. |
+| `MemInfo` | `TotalKb`, `AvailableKb`, and the computed `UsedPercent` (0..100). |
+| `CpuSampler` | Standalone CPU-usage sampler (busy % between two `/proc/stat` reads); reusable on its own. |
+| `ProcFs` | Pure parsers (`ParseStat`, `ParseMeminfo`, `ParseUptime`, `ParseLoadavg`, `ParseMillidegrees`) plus thin readers and `FormatUptime` — read a single metric yourself, or unit-test the parsers without a filesystem. |
+| `DeviceInfo` | Device/OS identity and network state: `Hostname()`, `OsRelease(key)`, `ReadBoardTempC()`, `OperState(iface)`, `IPv4(iface)`. |
+
+All telemetry types are **pure BCL** (no Avalonia dependency) and read from Linux
+`/proc` and `/sys`; on a non-Linux host every reader degrades to `null` / `"?"`
+rather than throwing, so the same code is safe to reference from cross-platform
+tooling. This mirrors the Rust SDK's `cr1140-sdk` `metrics` + `device` modules.
+
 ## Design Note
 
 `EvdevKeypadInput` raises a **managed `KeyPressed` event** on a background reader thread. Your application code subscribes to this event and drives navigation, view-model state, or an FSM — the **app-driven pattern**. 
@@ -208,6 +280,7 @@ See **[`cr1140-avalonia-demo`](https://github.com/UpTux/ifm-cr1140/tree/main/cr1
 - Multiple screens (Dashboard, Bale Counter, Knives, Wrapping, Telemetry, Settings)
 - Soft-key footer driven by F1–F6
 - MVVM with `INotifyPropertyChanged` and compiled XAML bindings
+- A Telemetry screen driven by `SystemTelemetry` + `DeviceInfo` (live CPU/memory/temperature/uptime/load and eth0/can0 state, refreshed at 1 Hz)
 - Verified running on the physical CR1140 device
 
 ## License

@@ -30,5 +30,8 @@
     <DataTemplate DataType="vm:SettingsViewModel">
       <views:SettingsView />
     </DataTemplate>
+    <DataTemplate DataType="vm:KeyEventsViewModel">
+      <views:KeyEventsView />
+    </DataTemplate>
   </Application.DataTemplates>
 </Application>

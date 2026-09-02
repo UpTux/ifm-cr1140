@@ -19,7 +19,8 @@ public sealed class MenuViewModel : ViewModelBase
             new("Knives"),
             new("Wrapping"),
             new("Telemetry"),
-            new("Settings")
+            new("Settings"),
+            new("Key Events")
         };
         SelectedIndex = 0;
     }

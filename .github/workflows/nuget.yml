@@ -22,6 +22,9 @@ jobs:
   pack:
     name: pack Cr1140.Avalonia
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write   # OIDC token for NuGet trusted publishing
     steps:
       - uses: actions/checkout@v4
 
@@ -39,8 +42,18 @@ jobs:
           name: nuget-packages
           path: dist/nuget/*.nupkg
 
-      # Push to nuget.org only on version tags. Requires NUGET_API_KEY to be
-      # configured as a repository secret (Settings → Secrets → Actions).
+      # Push to nuget.org only on version tags, via NuGet trusted publishing (OIDC):
+      # NuGet/login exchanges the GitHub OIDC token for a short-lived API key — no
+      # NUGET_API_KEY secret. Set the NUGET_USER repo variable (Settings → Secrets
+      # and variables → Actions → Variables) to the nuget.org account that owns the
+      # trusted-publishing policy for Cr1140.Avalonia.
+      - name: NuGet login (trusted publishing / OIDC)
+        if: startsWith(github.ref, 'refs/tags/avalonia-v')
+        id: nuget-login
+        uses: NuGet/login@v1
+        with:
+          user: ${{ vars.NUGET_USER }}
+
       - name: Push to NuGet.org
         if: startsWith(github.ref, 'refs/tags/avalonia-v')
-        run: dotnet nuget push "dist/nuget/*.nupkg" --api-key ${{ secrets.NUGET_API_KEY }} --source https://api.nuget.org/v3/index.json --skip-duplicate
+        run: dotnet nuget push "dist/nuget/*.nupkg" --api-key "${{ steps.nuget-login.outputs.NUGET_API_KEY }}" --source https://api.nuget.org/v3/index.json --skip-duplicate
