@@ -76,8 +76,11 @@ public sealed class MainViewModel : ViewModelBase
 
     private void OnKeyPressed(KeypadKey key)
     {
-        // Dispatch keypad events to the UI thread
-        Dispatcher.UIThread.Post(() => _nav.Handle(key));
+        // Remap the hardware key to the logical soft-key for the current footer
+        // layout (identity in Physical; physical-position based in Natural), then
+        // dispatch to the UI thread.
+        var logical = SoftKeyLayoutMap.ToLogical(key, _footerLayout);
+        Dispatcher.UIThread.Post(() => _nav.Handle(logical));
     }
 
     /// <summary>

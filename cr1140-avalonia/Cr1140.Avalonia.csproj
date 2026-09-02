@@ -12,7 +12,7 @@
   <PropertyGroup>
     <IsPackable>true</IsPackable>
     <PackageId>Cr1140.Avalonia</PackageId>
-    <Version>0.2.0</Version>
+    <Version>0.3.0</Version>
     <Authors>Patrick Dahlke</Authors>
     <Company>UpTux UG (haftungsbeschränkt)</Company>
     <Product>Cr1140.Avalonia</Product>
@@ -25,7 +25,7 @@
     <RepositoryType>git</RepositoryType>
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <PackageTags>cr1140;cr1141;ifm;ecomatdisplay;avalonia;linuxframebuffer;fbdev;evdev;keypad;softkey;embedded;aarch64;imx8mn</PackageTags>
-    <PackageReleaseNotes>0.2.0 — add SoftKeyFooter control (Physical/Natural layout). 0.1.0 — EvdevKeypadInput (IInputBackend) + KeypadKey.</PackageReleaseNotes>
+    <PackageReleaseNotes>0.3.0 — SoftKeyFooter Natural layout centres the d-pad; add SoftKeyLayoutMap.ToLogical (hardware→logical key remap). 0.2.0 — add SoftKeyFooter (Physical/Natural layout). 0.1.0 — EvdevKeypadInput (IInputBackend) + KeypadKey.</PackageReleaseNotes>
     <IncludeSymbols>true</IncludeSymbols>
     <SymbolPackageFormat>snupkg</SymbolPackageFormat>
     <PublishRepositoryUrl>true</PublishRepositoryUrl>

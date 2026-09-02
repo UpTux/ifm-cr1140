@@ -6,7 +6,7 @@ Custom Avalonia LinuxFramebuffer components for keypad-only embedded panels: evd
 
 Avalonia's built-in LinuxFramebuffer input (`LibInput` / `EvDev`) provides **touch and pointer input only** — no keyboard or keypad support. The ifm CR1140/CR1141 ecomatDisplay (4.3", i.MX 8M Nano, 800×480 fbdev) is available as a **keypad-only SKU** (no touchscreen), which means a headless-framebuffer Avalonia UI cannot receive input from the device's gpio-keys keypad using the stock input backend.
 
-**Cr1140.Avalonia** (v0.2.0) provides a custom `IInputBackend` implementation that directly reads the keypad from `/dev/input/event1` via Linux evdev, maps the raw keycodes to a typed `KeypadKey` enum (F1–F6, arrow keys, Enter), and raises a managed `KeyPressed` event for application-driven navigation. It also includes a **`SoftKeyFooter`** control — a 6-key soft-key footer with two layout modes (Physical and Natural) for operator-panel UIs. Both components have been **verified on real CR1140 hardware** rendering to `/dev/fb0` and receiving physical keypad input.
+**Cr1140.Avalonia** (v0.3.0) provides a custom `IInputBackend` implementation that directly reads the keypad from `/dev/input/event1` via Linux evdev, maps the raw keycodes to a typed `KeypadKey` enum (F1–F6, arrow keys, Enter), and raises a managed `KeyPressed` event for application-driven navigation. It also includes a **`SoftKeyFooter`** control — a 6-key soft-key footer with two layout modes (Physical and Natural) for operator-panel UIs. Both components have been **verified on real CR1140 hardware** rendering to `/dev/fb0` and receiving physical keypad input.
 
 ## Install
 
@@ -110,7 +110,7 @@ Only **key-down** events (`EV_KEY`, value `1`) are raised; key-up events are ign
 **`SoftKeyFooter`** is a 6-key soft-key footer control that displays labels above the CR1140's physical F1–F6 keys. It supports two layout modes:
 
 - **Physical** (default): Cells are ordered `F6 F4 F2 · d-pad · F1 F3 F5` to match the CR1140 keypad — each label sits directly over the button that triggers it. The d-pad cluster (Enter + arrows) sits in the middle between F2 and F1.
-- **Natural**: Cells run left-to-right `F1 F2 F3 F4 F5 F6` (no d-pad cell) for a more conventional UI layout.
+- **Natural**: Cells run left-to-right `F1 F2 F3 · d-pad · F4 F5 F6` — a conventional reading order, with the d-pad kept centred.
 
 ### XAML Usage
 
@@ -146,6 +146,28 @@ Or bind labels from a view model:
                   F6="{Binding SoftKeys[5].Label}" />
 ```
 
+### Natural layout & key remapping
+
+In **Physical** mode each label sits over its real button, so no key remapping is
+needed. In **Natural** mode the on-screen order no longer matches the physical
+buttons, so remap each incoming key-press with `SoftKeyLayoutMap.ToLogical` before
+acting on it — the button in physical position *i* then triggers the logical key
+shown there (e.g. hardware `F6` acts as `F1`). Arrow/Enter keys are never remapped.
+
+```csharp
+using Cr1140.Avalonia.Controls;
+
+keypad.KeyPressed += hw =>
+{
+    // identity in Physical; physical-position remap in Natural
+    var key = SoftKeyLayoutMap.ToLogical(hw, footerLayout);
+    Dispatcher.UIThread.Post(() => Handle(key));
+};
+```
+
+`SoftKeyLayoutMap.PhysicalOrder` is the single source of truth for the keypad's
+left-to-right F-key order; the `SoftKeyFooter` control uses it too.
+
 ### Properties
 
 **Namespace**: `Cr1140.Avalonia.Controls`
@@ -153,7 +175,7 @@ Or bind labels from a view model:
 | Property | Type | Default | Description |
 |----------|------|---------|-------------|
 | `Layout` | `SoftKeyFooterLayout` | `Physical` | Layout mode: `Physical` (keypad-ordered) or `Natural` (F1–F6 left-to-right) |
-| `ShowDPad` | `bool` | `true` | Show the d-pad cell in Physical mode (ignored in Natural mode) |
+| `ShowDPad` | `bool` | `true` | Show the centre d-pad cell (applies to both layouts; set `false` for a plain 6-cell footer) |
 | `F1` – `F6` | `string?` | `null` | Per-key label text; empty or `null` renders a blank cell |
 | `DividerBrush` | `IBrush` | `#333333` | Brush for cell dividers |
 | `KeyForeground` | `IBrush` | `#888888` | Brush for key names (F1, F2, etc.) |

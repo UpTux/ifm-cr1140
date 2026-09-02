@@ -4,6 +4,7 @@ using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
 using Avalonia.Layout;
 using Avalonia.Media;
+using Cr1140.Avalonia.Input;
 
 namespace Cr1140.Avalonia.Controls;
 
@@ -148,6 +149,12 @@ public class SoftKeyFooter : Border
         0 => F1, 1 => F2, 2 => F3, 3 => F4, 4 => F5, 5 => F6, _ => null
     };
 
+    private static int KeyIndex(KeypadKey k) => k switch
+    {
+        KeypadKey.F1 => 0, KeypadKey.F2 => 1, KeypadKey.F3 => 2,
+        KeypadKey.F4 => 3, KeypadKey.F5 => 4, KeypadKey.F6 => 5, _ => -1
+    };
+
     private void UpdateLabel(int i)
     {
         if (_labels[i] is { } tb)
@@ -158,17 +165,31 @@ public class SoftKeyFooter : Border
 
     private void Rebuild()
     {
-        // Cell order by key index (0=F1 .. 5=F6); -1 marks the centre d-pad cell.
-        int[] order = Layout == SoftKeyFooterLayout.Physical
-            ? (ShowDPad ? new[] { 5, 3, 1, -1, 0, 2, 4 } : new[] { 5, 3, 1, 0, 2, 4 })
-            : new[] { 0, 1, 2, 3, 4, 5 };
+        // Six key indices (0=F1 .. 5=F6) in current left-to-right order. The
+        // physical order is the single source of truth in SoftKeyLayoutMap; the
+        // d-pad (Enter + arrows) sits physically in the centre in BOTH modes.
+        var keyOrder = (Layout == SoftKeyFooterLayout.Physical
+            ? SoftKeyLayoutMap.PhysicalOrder
+            : SoftKeyLayoutMap.NaturalOrder).Select(KeyIndex).ToArray();
+
+        var order = new List<int>(7);
+        if (ShowDPad)
+        {
+            order.AddRange(keyOrder.Take(3));
+            order.Add(-1);
+            order.AddRange(keyOrder.Skip(3));
+        }
+        else
+        {
+            order.AddRange(keyOrder);
+        }
 
         for (int i = 0; i < 6; i++)
         {
             _labels[i] = null;
         }
 
-        var grid = new UniformGrid { Columns = order.Length };
+        var grid = new UniformGrid { Columns = order.Count };
         foreach (var idx in order)
         {
             grid.Children.Add(idx < 0 ? BuildDPad() : BuildKeyCell(idx));
