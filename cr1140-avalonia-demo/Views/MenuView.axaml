@@ -1,0 +1,43 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:vm="using:Cr1140.AvaloniaDemo.ViewModels"
+             mc:Ignorable="d" d:DesignWidth="800" d:DesignHeight="480"
+             x:Class="Cr1140.AvaloniaDemo.Views.MenuView"
+             x:CompileBindings="True"
+             x:DataType="vm:MenuViewModel">
+
+  <ListBox ItemsSource="{Binding Items}"
+           SelectedIndex="{Binding SelectedIndex}"
+           Background="Transparent"
+           IsHitTestVisible="False"
+           Padding="40,60"
+           Margin="0">
+    <ListBox.Styles>
+      <Style Selector="ListBoxItem">
+        <Setter Property="Padding" Value="24,16"/>
+        <Setter Property="Margin" Value="0,8"/>
+        <Setter Property="Background" Value="#1a1a1a"/>
+        <Setter Property="BorderBrush" Value="#333333"/>
+        <Setter Property="BorderThickness" Value="1"/>
+        <Setter Property="CornerRadius" Value="4"/>
+      </Style>
+      <Style Selector="ListBoxItem:selected">
+        <Setter Property="Background" Value="#00aaff"/>
+        <Setter Property="BorderBrush" Value="#00ccff"/>
+      </Style>
+      <Style Selector="ListBoxItem:selected /template/ ContentPresenter">
+        <Setter Property="Foreground" Value="#000000"/>
+      </Style>
+    </ListBox.Styles>
+    <ListBox.ItemTemplate>
+      <DataTemplate x:DataType="vm:MenuItemViewModel">
+        <TextBlock Text="{Binding Label}" 
+                   FontSize="24" 
+                   FontWeight="SemiBold"/>
+      </DataTemplate>
+    </ListBox.ItemTemplate>
+  </ListBox>
+
+</UserControl>

@@ -1,0 +1,41 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:vm="using:Cr1140.AvaloniaDemo.ViewModels"
+             mc:Ignorable="d" d:DesignWidth="800" d:DesignHeight="480"
+             x:Class="Cr1140.AvaloniaDemo.Views.TelemetryView"
+             x:CompileBindings="True"
+             x:DataType="vm:TelemetryViewModel">
+
+  <ScrollViewer Padding="40,20">
+    <ItemsControl ItemsSource="{Binding Rows}">
+      <ItemsControl.ItemTemplate>
+        <DataTemplate x:DataType="vm:TelemetryRow">
+          <Border Background="#1a1a1a" 
+                  BorderBrush="#333333" 
+                  BorderThickness="1" 
+                  CornerRadius="4"
+                  Padding="20,12"
+                  Margin="0,0,0,8">
+            <Grid ColumnDefinitions="*,Auto">
+              <TextBlock Grid.Column="0" 
+                         Text="{Binding Name}" 
+                         FontSize="18" 
+                         Foreground="#888888"
+                         VerticalAlignment="Center"/>
+              <TextBlock Grid.Column="1" 
+                         Text="{Binding Value}" 
+                         FontSize="20" 
+                         FontWeight="SemiBold"
+                         Foreground="#00aaff"
+                         VerticalAlignment="Center"
+                         Margin="20,0,0,0"/>
+            </Grid>
+          </Border>
+        </DataTemplate>
+      </ItemsControl.ItemTemplate>
+    </ItemsControl>
+  </ScrollViewer>
+
+</UserControl>

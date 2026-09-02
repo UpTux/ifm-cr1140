@@ -1,0 +1,82 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:vm="using:Cr1140.AvaloniaDemo.ViewModels"
+             mc:Ignorable="d" d:DesignWidth="800" d:DesignHeight="480"
+             x:Class="Cr1140.AvaloniaDemo.Views.DashboardView"
+             x:CompileBindings="True"
+             x:DataType="vm:DashboardViewModel">
+
+  <Grid RowDefinitions="*,Auto" Margin="40,20">
+    <!-- Large Clock Display -->
+    <Viewbox Grid.Row="0" VerticalAlignment="Center" Margin="0,0,0,20">
+      <TextBlock Text="{Binding Clock}" 
+                 FontSize="120" 
+                 FontWeight="Bold"
+                 Foreground="#00aaff"
+                 HorizontalAlignment="Center"/>
+    </Viewbox>
+
+    <!-- Info Rows -->
+    <StackPanel Grid.Row="1" Spacing="12">
+      <Border Background="#1a1a1a" 
+              BorderBrush="#333333" 
+              BorderThickness="1" 
+              CornerRadius="4"
+              Padding="20,12">
+        <Grid ColumnDefinitions="Auto,*">
+          <TextBlock Grid.Column="0" 
+                     Text="Application:" 
+                     FontSize="18" 
+                     Foreground="#888888"
+                     Margin="0,0,16,0"/>
+          <TextBlock Grid.Column="1" 
+                     Text="{Binding AppName}" 
+                     FontSize="18" 
+                     FontWeight="SemiBold"
+                     Foreground="#e0e0e0"/>
+        </Grid>
+      </Border>
+
+      <Border Background="#1a1a1a" 
+              BorderBrush="#333333" 
+              BorderThickness="1" 
+              CornerRadius="4"
+              Padding="20,12">
+        <Grid ColumnDefinitions="Auto,*">
+          <TextBlock Grid.Column="0" 
+                     Text="Resolution:" 
+                     FontSize="18" 
+                     Foreground="#888888"
+                     Margin="0,0,16,0"/>
+          <TextBlock Grid.Column="1" 
+                     Text="{Binding Resolution}" 
+                     FontSize="18" 
+                     FontWeight="SemiBold"
+                     Foreground="#e0e0e0"/>
+        </Grid>
+      </Border>
+
+      <Border Background="#1a1a1a" 
+              BorderBrush="#333333" 
+              BorderThickness="1" 
+              CornerRadius="4"
+              Padding="20,12">
+        <Grid ColumnDefinitions="Auto,*">
+          <TextBlock Grid.Column="0" 
+                     Text="Backend:" 
+                     FontSize="18" 
+                     Foreground="#888888"
+                     Margin="0,0,16,0"/>
+          <TextBlock Grid.Column="1" 
+                     Text="{Binding Backend}" 
+                     FontSize="18" 
+                     FontWeight="SemiBold"
+                     Foreground="#e0e0e0"/>
+        </Grid>
+      </Border>
+    </StackPanel>
+  </Grid>
+
+</UserControl>

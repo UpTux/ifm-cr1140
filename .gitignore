@@ -14,3 +14,8 @@
 
 # Vendor delivery (ifm reference material, large binaries)
 ifm-delivery/
+
+# .NET build output
+bin/
+obj/
+cr1140-avalonia-demo/publish/

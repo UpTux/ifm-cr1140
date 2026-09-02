@@ -52,3 +52,28 @@ run-baler: build-baler
 recon:
     scp scripts/cr1140-recon.sh {{user}}@{{host}}:/tmp/
     ssh {{user}}@{{host}} 'sh /tmp/cr1140-recon.sh' 2>&1 | tee docs/recon.txt
+
+# Avalonia demo recipes (device now at 10.10.10.229, override via CR1140_HOST)
+avdir := "/home/cds-apps/cr1140-avalonia-demo"
+
+# Cross-publish the Avalonia demo from macOS to linux-arm64 (self-contained)
+publish-avalonia:
+    dotnet publish cr1140-avalonia-demo/Cr1140.AvaloniaDemo.csproj -c Release -r linux-arm64 --self-contained true -p:InvariantGlobalization=true -o cr1140-avalonia-demo/publish/linux-arm64
+
+# Deploy + autostart the Avalonia demo (stops CODESYS + app-launcher + cr1140-app, enables cr1140-avalonia.service)
+deploy-avalonia: publish-avalonia
+    ssh {{user}}@{{host}} 'mkdir -p {{avdir}}'
+    scp -r cr1140-avalonia-demo/publish/linux-arm64/* {{user}}@{{host}}:{{avdir}}/
+    scp cr1140-avalonia-demo/deploy/cr1140-avalonia.service cr1140-avalonia-demo/deploy/install.sh {{user}}@{{host}}:/tmp/
+    ssh {{user}}@{{host}} 'sh /tmp/install.sh'
+
+# Quick manual run of the Avalonia demo (foreground; stops services but does NOT enable autostart)
+run-avalonia: publish-avalonia
+    ssh {{user}}@{{host}} 'systemctl stop cr1140-avalonia.service || true; systemctl stop cr1140-app.service || true; mkdir -p {{avdir}}'
+    scp -r cr1140-avalonia-demo/publish/linux-arm64/* {{user}}@{{host}}:{{avdir}}/
+    ssh {{user}}@{{host}} 'DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=1 {{avdir}}/Cr1140.AvaloniaDemo /dev/input/event1'
+
+# Restore stock services (unmask CODESYS/app-launcher, stop cr1140-avalonia)
+restore-avalonia:
+    scp cr1140-avalonia-demo/deploy/restore.sh {{user}}@{{host}}:/tmp/
+    ssh {{user}}@{{host}} 'sh /tmp/restore.sh'

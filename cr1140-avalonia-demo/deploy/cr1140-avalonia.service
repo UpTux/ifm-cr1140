@@ -1,0 +1,13 @@
+[Unit]
+Description=CR1140 Avalonia operator-panel demo
+After=multi-user.target
+
+[Service]
+Type=simple
+Environment=DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=1
+ExecStart=/home/cds-apps/cr1140-avalonia-demo/Cr1140.AvaloniaDemo /dev/input/event1
+Restart=on-failure
+RestartSec=2
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,34 @@
+<Application x:Class="Cr1140.AvaloniaDemo.App"
+             xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:Cr1140.AvaloniaDemo.ViewModels"
+             xmlns:views="using:Cr1140.AvaloniaDemo.Views"
+             RequestedThemeVariant="Dark">
+  <Application.Styles>
+    <FluentTheme />
+  </Application.Styles>
+
+  <Application.DataTemplates>
+    <DataTemplate DataType="vm:MenuViewModel">
+      <views:MenuView />
+    </DataTemplate>
+    <DataTemplate DataType="vm:DashboardViewModel">
+      <views:DashboardView />
+    </DataTemplate>
+    <DataTemplate DataType="vm:BaleCounterViewModel">
+      <views:BaleCounterView />
+    </DataTemplate>
+    <DataTemplate DataType="vm:KnivesViewModel">
+      <views:KnivesView />
+    </DataTemplate>
+    <DataTemplate DataType="vm:WrappingViewModel">
+      <views:WrappingView />
+    </DataTemplate>
+    <DataTemplate DataType="vm:TelemetryViewModel">
+      <views:TelemetryView />
+    </DataTemplate>
+    <DataTemplate DataType="vm:SettingsViewModel">
+      <views:SettingsView />
+    </DataTemplate>
+  </Application.DataTemplates>
+</Application>

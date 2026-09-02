@@ -1,0 +1,72 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:vm="using:Cr1140.AvaloniaDemo.ViewModels"
+             mc:Ignorable="d" d:DesignWidth="800" d:DesignHeight="480"
+             x:Class="Cr1140.AvaloniaDemo.Views.MainView"
+             x:CompileBindings="True"
+             x:DataType="vm:MainViewModel">
+  
+  <Grid RowDefinitions="Auto,*,Auto">
+    <!-- Header -->
+    <Border Grid.Row="0" 
+            Background="#1a1a1a" 
+            BorderBrush="#333333" 
+            BorderThickness="0,0,0,2"
+            Padding="16,12">
+      <TextBlock Text="{Binding Title}" 
+                 FontSize="28" 
+                 FontWeight="Bold" 
+                 Foreground="#e0e0e0"
+                 HorizontalAlignment="Center"/>
+    </Border>
+
+    <!-- Content Area -->
+    <ContentControl Grid.Row="1" 
+                    Content="{Binding CurrentContent}"
+                    Background="#0d0d0d"/>
+
+    <!-- Footer - Soft Keys -->
+    <Border Grid.Row="2" 
+            Background="#1a1a1a" 
+            BorderBrush="#333333" 
+            BorderThickness="0,2,0,0"
+            Height="64">
+      <ItemsControl ItemsSource="{Binding SoftKeys}">
+        <ItemsControl.ItemsPanel>
+          <ItemsPanelTemplate>
+            <UniformGrid Columns="6"/>
+          </ItemsPanelTemplate>
+        </ItemsControl.ItemsPanel>
+        <ItemsControl.ItemTemplate>
+          <DataTemplate x:DataType="vm:SoftKeyViewModel">
+            <Border BorderBrush="#333333" 
+                    BorderThickness="1,0,0,0"
+                    Background="#1a1a1a"
+                    Padding="4">
+              <Grid RowDefinitions="Auto,*">
+                <TextBlock Grid.Row="0" 
+                           Text="{Binding Key}" 
+                           FontSize="10" 
+                           Foreground="#888888"
+                           HorizontalAlignment="Center"
+                           Margin="0,2"/>
+                <TextBlock Grid.Row="1" 
+                           Text="{Binding Label}" 
+                           FontSize="14" 
+                           FontWeight="SemiBold"
+                           Foreground="#00aaff"
+                           HorizontalAlignment="Center"
+                           VerticalAlignment="Center"
+                           TextWrapping="Wrap"
+                           TextAlignment="Center"/>
+              </Grid>
+            </Border>
+          </DataTemplate>
+        </ItemsControl.ItemTemplate>
+      </ItemsControl>
+    </Border>
+  </Grid>
+
+</UserControl>
