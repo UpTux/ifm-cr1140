@@ -1,0 +1,43 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <RootNamespace>Cr1140.Avalonia</RootNamespace>
+    <AssemblyName>Cr1140.Avalonia</AssemblyName>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+  </PropertyGroup>
+
+  <!-- NuGet package metadata -->
+  <PropertyGroup>
+    <IsPackable>true</IsPackable>
+    <PackageId>Cr1140.Avalonia</PackageId>
+    <Version>0.1.0</Version>
+    <Authors>Patrick Dahlke</Authors>
+    <Company>UpTux UG (haftungsbeschränkt)</Company>
+    <Product>Cr1140.Avalonia</Product>
+    <Title>Avalonia keypad input for the ifm CR1140 / CR1141</Title>
+    <Description>Avalonia LinuxFramebuffer keypad input for the ifm CR1140/CR1141 (ecomatDisplay 4.3", NXP i.MX 8M Nano / aarch64). A custom IInputBackend that reads the gpio-keys keypad from /dev/input/event1 (evdev) and raises key events. Avalonia's built-in LinuxFramebuffer input (LibInput / EvDev) handles touch/pointer only, so keypad-only SKUs need this to drive a headless framebuffer UI. Dual-licensed: GPL-3.0-only, or commercial from UpTux UG.</Description>
+    <Copyright>Copyright (C) 2026 Patrick Dahlke / UpTux UG (haftungsbeschränkt)</Copyright>
+    <PackageLicenseExpression>GPL-3.0-only</PackageLicenseExpression>
+    <PackageProjectUrl>https://github.com/UpTux/ifm-cr1140</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/UpTux/ifm-cr1140</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <PackageTags>cr1140;cr1141;ifm;ecomatdisplay;avalonia;linuxframebuffer;fbdev;evdev;keypad;embedded;aarch64;imx8mn</PackageTags>
+    <PackageReleaseNotes>0.1.0 — initial release: EvdevKeypadInput (IInputBackend) + KeypadKey.</PackageReleaseNotes>
+    <IncludeSymbols>true</IncludeSymbols>
+    <SymbolPackageFormat>snupkg</SymbolPackageFormat>
+    <PublishRepositoryUrl>true</PublishRepositoryUrl>
+    <EmbedUntrackedSources>true</EmbedUntrackedSources>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Avalonia" Version="11.3.20" />
+    <PackageReference Include="Avalonia.LinuxFramebuffer" Version="11.3.20" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="README.md" Pack="true" PackagePath="\" />
+  </ItemGroup>
+</Project>

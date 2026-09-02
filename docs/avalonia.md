@@ -27,6 +27,90 @@ only**. This SKU is **keypad-only** (no touch), so the demo includes a hand-roll
 `InvariantGlobalization=true` drops the libicu dependency; the publish includes the
 .NET runtime and is ~90 MB deployed.
 
+## Reusable package (Cr1140.Avalonia)
+
+The keypad input backend (`KeypadKey` enum + `EvdevKeypadInput : IInputBackend`) has
+been extracted from the demo into a standalone **NuGet package** (`Cr1140.Avalonia`,
+version 0.1.0) under `cr1140-avalonia/`. It is dual-licensed **GPL-3.0-only** (for
+open source) or **commercial** (contact UpTux UG <info@uptux.de>). The package targets
+.NET 8.0 and depends on Avalonia 11.3.20 + Avalonia.LinuxFramebuffer 11.3.20 only.
+
+### API (namespace `Cr1140.Avalonia.Input`)
+
+- **`enum KeypadKey`**: `F1`, `F2`, `F3`, `F4`, `F5`, `F6`, `Up`, `Down`, `Left`,
+  `Right`, `Enter`.
+- **`sealed class EvdevKeypadInput : IInputBackend, IDisposable`**: 
+  - Constructor: `EvdevKeypadInput(string devicePath)` (e.g. `"/dev/input/event1"`).
+  - Event: `Action<KeypadKey>? KeyPressed` (raised on a background thread when a key is
+    pressed).
+  - Methods: `Initialize(IScreenInfoProvider, Action<RawInputEventArgs>)` (starts evdev
+    reader thread), `SetInputRoot(IInputRoot)`, `Dispose()` (stops thread).
+
+Reads 24-byte `input_event` records from the evdev node, filters `EV_KEY` type=1
+value=1 (key-DOWN), and maps codes 59..64, 103, 105, 106, 108, 28 to `KeypadKey`.
+Verified on CR1140/CR1141 (aarch64 glibc 2.35, gpio-keys keypad).
+
+### Usage
+
+Install from NuGet (once published):
+
+```sh
+dotnet add package Cr1140.Avalonia
+```
+
+Or reference locally (as the demo does):
+
+```xml
+<ProjectReference Include="../cr1140-avalonia/Cr1140.Avalonia.csproj" />
+```
+
+Wire into Avalonia's LinuxFramebuffer startup:
+
+```csharp
+using Cr1140.Avalonia.Input;
+
+var keypad = new EvdevKeypadInput("/dev/input/event1");
+keypad.KeyPressed += key => { /* handle key */ };
+
+AppBuilder.Configure<App>()
+    .StartLinuxFbDev(args, "/dev/fb0", 1.0, keypad);
+```
+
+Marshal `KeyPressed` callbacks to the UI thread with `Dispatcher.UIThread.Post` (the
+event fires on the evdev reader thread). See `cr1140-avalonia-demo/Program.cs` and
+`ViewModels/MainViewModel.cs` for a full example, or read
+[`cr1140-avalonia/README.md`](../cr1140-avalonia/README.md) for API usage and wiring.
+
+### Packing and publishing
+
+The root `justfile` includes a `pack-avalonia` recipe:
+
+```sh
+just pack-avalonia
+```
+
+This runs `dotnet pack -c Release` and emits `dist/nuget/Cr1140.Avalonia.0.1.0.nupkg` (plus a `.snupkg` symbols package).
+
+To publish to NuGet.org:
+
+```sh
+just push-nuget $NUGET_API_KEY
+# equivalently:
+dotnet nuget push "dist/nuget/*.nupkg" \
+    --api-key $NUGET_API_KEY --source https://api.nuget.org/v3/index.json --skip-duplicate
+```
+
+Or use the GitHub Actions workflow (`.github/workflows/nuget.yml`) triggered by a
+version tag (`avalonia-v*`):
+
+```sh
+git tag avalonia-v0.1.0
+git push origin avalonia-v0.1.0
+```
+
+The workflow builds, packs, and publishes to NuGet.org automatically (requires
+`NUGET_API_KEY` secret configured in the repo).
+
 ## Build and deploy
 
 All recipes live in the **root `justfile`** (not the Avalonia directory — it has no

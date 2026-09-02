@@ -15,15 +15,18 @@ working in that crate; read this map first to find it.
 | Slint integ | [`cr1140-slint/CONTEXT.md`](cr1140-slint/CONTEXT.md)           | Slint platform backend wiring the HAL to linuxfb rendering + evdev events |
 | Demo        | [`cr1140-slint-demo/CONTEXT.md`](cr1140-slint-demo/CONTEXT.md) | Reference application built on the SDK + Slint integration (system dashboard) |
 | Baler demo  | [`cr1140-baler-demo/CONTEXT.md`](cr1140-baler-demo/CONTEXT.md) | Second reference app: a round-baler operator panel (retain + CAN + multi-screen UI) |
-| Avalonia demo | [`cr1140-avalonia-demo/CONTEXT.md`](cr1140-avalonia-demo/CONTEXT.md) | .NET/Avalonia operator-panel reference app: renders to `/dev/fb0` via the Avalonia LinuxFramebuffer backend (software Skia) + a custom evdev keypad input backend |
+| Avalonia input | [`cr1140-avalonia/CONTEXT.md`](cr1140-avalonia/CONTEXT.md) | Reusable Avalonia LinuxFramebuffer keypad input backend (evdev → KeypadKey), published as the `Cr1140.Avalonia` NuGet package |
+| Avalonia demo | [`cr1140-avalonia-demo/CONTEXT.md`](cr1140-avalonia-demo/CONTEXT.md) | .NET/Avalonia operator-panel reference app: renders to `/dev/fb0` via the Avalonia LinuxFramebuffer backend (software Skia) + the `Cr1140.Avalonia` keypad input package |
 
 Dependency direction: `demo → slint + sdk → hal`. The HAL knows nothing about the
 layers above it.
 
-**Note:** `cr1140-avalonia-demo` is NOT part of the Cargo workspace (separate .NET
-toolchain). It demonstrates that the device can host a copyleft-free operator-panel
-app (Avalonia is MIT-licensed) when that is a customer requirement, unlike the
-Slint-based demos (GPL-3.0-only due to Slint's licensing).
+**Note:** `cr1140-avalonia-demo` and `cr1140-avalonia` are NOT part of the Cargo 
+workspace (separate .NET toolchain). Dependency direction: `cr1140-avalonia-demo → 
+cr1140-avalonia`. The Avalonia demos demonstrate that the device can host a 
+copyleft-free operator-panel app (Avalonia is MIT-licensed; the `Cr1140.Avalonia` 
+package is dual-licensed GPL-3.0-only / commercial) when that is a customer 
+requirement, unlike the Slint-based demos (GPL-3.0-only due to Slint's licensing).
 ## Shared decisions
 
 System-wide architectural decisions live in [`docs/adr/`](docs/adr/) (created lazily

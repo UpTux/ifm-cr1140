@@ -1,0 +1,46 @@
+name: NuGet (Cr1140.Avalonia)
+
+on:
+  push:
+    tags:
+      - 'avalonia-v*'
+  pull_request:
+    paths:
+      - 'cr1140-avalonia/**'
+  workflow_dispatch:
+
+# Cancel in-progress runs for the same ref when a newer commit is pushed.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+# Least privilege: jobs only read the repo contents.
+permissions:
+  contents: read
+
+jobs:
+  pack:
+    name: pack Cr1140.Avalonia
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Pack library
+        run: dotnet pack cr1140-avalonia/Cr1140.Avalonia.csproj -c Release -o dist/nuget
+
+      - name: Upload NuGet packages
+        uses: actions/upload-artifact@v4
+        with:
+          name: nuget-packages
+          path: dist/nuget/*.nupkg
+
+      # Push to nuget.org only on version tags. Requires NUGET_API_KEY to be
+      # configured as a repository secret (Settings → Secrets → Actions).
+      - name: Push to NuGet.org
+        if: startsWith(github.ref, 'refs/tags/avalonia-v')
+        run: dotnet nuget push "dist/nuget/*.nupkg" --api-key ${{ secrets.NUGET_API_KEY }} --source https://api.nuget.org/v3/index.json --skip-duplicate

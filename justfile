@@ -77,3 +77,13 @@ run-avalonia: publish-avalonia
 restore-avalonia:
     scp cr1140-avalonia-demo/deploy/restore.sh {{user}}@{{host}}:/tmp/
     ssh {{user}}@{{host}} 'sh /tmp/restore.sh'
+
+# --- NuGet: Cr1140.Avalonia library ---
+
+# Pack the Cr1140.Avalonia library to dist/nuget
+pack-avalonia:
+    dotnet pack cr1140-avalonia/Cr1140.Avalonia.csproj -c Release -o dist/nuget
+
+# Push packed NuGet packages to nuget.org (usage: just push-nuget $NUGET_API_KEY)
+push-nuget key:
+    dotnet nuget push "dist/nuget/*.nupkg" --api-key {{key}} --source https://api.nuget.org/v3/index.json --skip-duplicate

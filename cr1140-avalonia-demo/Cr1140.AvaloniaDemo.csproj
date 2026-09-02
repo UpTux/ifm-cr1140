@@ -17,4 +17,8 @@
     <PackageReference Include="Avalonia.LinuxFramebuffer" Version="11.3.20" />
     <PackageReference Include="Avalonia.Skia" Version="11.3.20" />
   </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../cr1140-avalonia/Cr1140.Avalonia.csproj" />
+  </ItemGroup>
 </Project>

@@ -1,7 +1,7 @@
 using System;
 using Avalonia;
 using Avalonia.LinuxFramebuffer;
-using Cr1140.AvaloniaDemo.Input;
+using Cr1140.Avalonia.Input;
 
 namespace Cr1140.AvaloniaDemo;
 

@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
-using Cr1140.AvaloniaDemo.Input;
+using Cr1140.Avalonia.Input;
 
 namespace Cr1140.AvaloniaDemo.ViewModels;
 

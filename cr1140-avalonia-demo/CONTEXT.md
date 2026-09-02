@@ -5,7 +5,8 @@
 A .NET/Avalonia 11.3.20 **reference application** for the CR1140/CR1141, demonstrating
 how to build an operator-panel UI in C# that renders directly to the Linux framebuffer
 (`/dev/fb0`) via Avalonia's LinuxFramebuffer backend (software Skia) and captures
-keypad input via a custom evdev backend. It mirrors the UX and feature set of the
+keypad input via the **`Cr1140.Avalonia` package** (a reusable evdev backend; see
+`../cr1140-avalonia/CONTEXT.md`). It mirrors the UX and feature set of the
 Rust `cr1140-baler-demo` — menu-driven navigation, bale counter, knives IN/OUT,
 wrapping cycle — but sits entirely outside the Cargo workspace (separate .NET toolchain).
 
@@ -26,8 +27,7 @@ beyond the minimum for input and font.
 
 | Module | Role |
 |--------|------|
-| `Input/KeypadKey.cs` | 11-member enum (`F1`..`F6`, `Up`, `Down`, `Left`, `Right`, `Enter`). |
-| `Input/EvdevKeypadInput.cs` | Custom `IInputBackend` that polls `/dev/input/event1` for EV_KEY events (24-byte `input_event` records; evdev codes 59..64, 103, 105, 106, 108, 28), maps to `KeypadKey`, and raises a `KeyPressed` event. Avalonia's built-in LinuxFramebuffer input (`LibInput` / `EvDev`) handles touch/pointer only; this SKU is keypad-only, so we hand-roll it. |
+| `Cr1140.Avalonia` (package) | Keypad input backend: `KeypadKey` enum (11 members: `F1`..`F6`, `Up`, `Down`, `Left`, `Right`, `Enter`) and `EvdevKeypadInput : IInputBackend` (polls `/dev/input/event1` for EV_KEY events, maps evdev codes 59..64, 103, 105, 106, 108, 28 to `KeypadKey`, raises `KeyPressed` event). Namespace `Cr1140.Avalonia.Input`. Referenced via `<ProjectReference Include="../cr1140-avalonia/Cr1140.Avalonia.csproj" />`. See `../cr1140-avalonia/CONTEXT.md` for details. Avalonia's built-in LinuxFramebuffer input (`LibInput` / `EvDev`) handles touch/pointer only; this SKU is keypad-only, so the package provides the missing backend. |
 | `ViewModels/NavigationController.cs` | Pure FSM over `KeypadKey`: on Menu, Up/Down/Enter navigate items; on sub-screens F6 = Back → Menu. Updates `MainViewModel.CurrentContent/Title/SoftKeys` and the screen VMs. |
 | `ViewModels/MainViewModel.cs` | Root VM: `string Title`, `object? CurrentContent` (bound by ContentControl + DataTemplates), `IReadOnlyList<SoftKeyViewModel> SoftKeys` (6 footer cells). Subscribes to `EvdevKeypadInput.KeyPressed`; dispatches keys to the `NavigationController` on the UI thread (`Dispatcher.UIThread.Post`). |
 | `ViewModels/<Screen>ViewModel.cs` | Per-screen VM (Menu, Dashboard, BaleCounter, Knives, Wrapping, Telemetry, Settings). Each exposes bindable properties and is mapped to its `Views/<Screen>View.axaml` via App-level `DataTemplate`s. |

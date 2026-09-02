@@ -6,8 +6,20 @@ using Avalonia.Input;
 using Avalonia.Input.Raw;
 using Avalonia.LinuxFramebuffer.Input;
 
-namespace Cr1140.AvaloniaDemo.Input;
+namespace Cr1140.Avalonia.Input;
 
+/// <summary>
+/// An Avalonia <see cref="IInputBackend"/> that reads the CR1140/CR1141 gpio-keys
+/// keypad from an evdev device node (default <c>/dev/input/event1</c>) and raises
+/// <see cref="KeyPressed"/> for each key-press.
+/// </summary>
+/// <remarks>
+/// Avalonia's stock LinuxFramebuffer input (LibInput / EvDev) delivers only
+/// touch/pointer events, so a keypad-only panel needs this. Pass an instance as the
+/// <c>inputBackend</c> argument of <c>StartLinuxFbDev</c>/<c>StartLinuxDrm</c> and
+/// drive your UI from <see cref="KeyPressed"/> (marshal to the UI thread with
+/// <c>Dispatcher.UIThread.Post</c>).
+/// </remarks>
 public sealed class EvdevKeypadInput : IInputBackend, IDisposable
 {
     private const int EventSize = 24;
@@ -36,13 +48,17 @@ public sealed class EvdevKeypadInput : IInputBackend, IDisposable
     private IInputRoot? _inputRoot;
     private Action<RawInputEventArgs>? _onInput; // Future text-entry could dispatch RawKeyEventArgs via this
 
+    /// <summary>Raised on the reader thread when a mapped key is pressed (evdev value 1).</summary>
     public event Action<KeypadKey>? KeyPressed;
 
+    /// <summary>Creates a backend bound to an evdev device node.</summary>
+    /// <param name="devicePath">The evdev node to read, e.g. <c>/dev/input/event1</c>.</param>
     public EvdevKeypadInput(string devicePath)
     {
         _devicePath = devicePath;
     }
 
+    /// <summary>Called by the Avalonia LinuxFramebuffer platform; starts the evdev reader thread.</summary>
     public void Initialize(IScreenInfoProvider info, Action<RawInputEventArgs> onInput)
     {
         _onInput = onInput;
@@ -55,6 +71,7 @@ public sealed class EvdevKeypadInput : IInputBackend, IDisposable
         _readerThread.Start();
     }
 
+    /// <summary>Called by the Avalonia LinuxFramebuffer platform to supply the input root.</summary>
     public void SetInputRoot(IInputRoot root)
     {
         _inputRoot = root;
@@ -109,6 +126,7 @@ public sealed class EvdevKeypadInput : IInputBackend, IDisposable
         }
     }
 
+    /// <summary>Stops the reader thread and closes the device node.</summary>
     public void Dispose()
     {
         _cts.Cancel();

@@ -19,3 +19,4 @@ ifm-delivery/
 bin/
 obj/
 cr1140-avalonia-demo/publish/
+dist/
