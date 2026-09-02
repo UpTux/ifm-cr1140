@@ -8,7 +8,7 @@
              x:CompileBindings="True"
              x:DataType="vm:TelemetryViewModel">
 
-  <ScrollViewer Padding="40,20">
+  <ScrollViewer x:Name="Scroller" Padding="40,20" VerticalScrollBarVisibility="Auto">
     <ItemsControl ItemsSource="{Binding Rows}">
       <ItemsControl.ItemTemplate>
         <DataTemplate x:DataType="vm:TelemetryRow">

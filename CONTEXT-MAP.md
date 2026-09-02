@@ -15,7 +15,7 @@ working in that crate; read this map first to find it.
 | Slint integ | [`cr1140-slint/CONTEXT.md`](cr1140-slint/CONTEXT.md)           | Slint platform backend wiring the HAL to linuxfb rendering + evdev events |
 | Demo        | [`cr1140-slint-demo/CONTEXT.md`](cr1140-slint-demo/CONTEXT.md) | Reference application built on the SDK + Slint integration (system dashboard) |
 | Baler demo  | [`cr1140-baler-demo/CONTEXT.md`](cr1140-baler-demo/CONTEXT.md) | Second reference app: a round-baler operator panel (retain + CAN + multi-screen UI) |
-| Avalonia input | [`cr1140-avalonia/CONTEXT.md`](cr1140-avalonia/CONTEXT.md) | Reusable Avalonia LinuxFramebuffer keypad input backend (evdev → KeypadKey), published as the `Cr1140.Avalonia` NuGet package |
+| Avalonia support | [`cr1140-avalonia/CONTEXT.md`](cr1140-avalonia/CONTEXT.md) | Avalonia LinuxFramebuffer support published as the `Cr1140.Avalonia` NuGet package: keypad input backend (evdev → KeypadKey), `SoftKeyFooter` control, and a readable `SystemTelemetry`/`DeviceInfo` system-telemetry API (CPU/memory/temp/uptime/load + network state; mirrors the Rust SDK `metrics`/`device`) |
 | Avalonia demo | [`cr1140-avalonia-demo/CONTEXT.md`](cr1140-avalonia-demo/CONTEXT.md) | .NET/Avalonia operator-panel reference app: renders to `/dev/fb0` via the Avalonia LinuxFramebuffer backend (software Skia) + the `Cr1140.Avalonia` keypad input package |
 
 Dependency direction: `demo → slint + sdk → hal`. The HAL knows nothing about the
