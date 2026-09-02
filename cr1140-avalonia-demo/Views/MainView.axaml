@@ -3,6 +3,7 @@
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              xmlns:vm="using:Cr1140.AvaloniaDemo.ViewModels"
+             xmlns:cr="using:Cr1140.Avalonia.Controls"
              mc:Ignorable="d" d:DesignWidth="800" d:DesignHeight="480"
              x:Class="Cr1140.AvaloniaDemo.Views.MainView"
              x:CompileBindings="True"
@@ -27,63 +28,17 @@
                     Content="{Binding CurrentContent}"
                     Background="#0d0d0d"/>
 
-    <!-- Footer - soft keys laid out to match the PHYSICAL keypad order,
-         left-to-right: [F6 F4 F2] · d-pad · [F1 F3 F5], so each on-screen
-         label sits over the physical button that triggers it. SoftKeys is
-         indexed F1=0 .. F6=5. -->
-    <Border Grid.Row="2"
-            Background="#1a1a1a"
-            BorderBrush="#333333"
-            BorderThickness="0,2,0,0"
-            Height="64">
-      <UniformGrid Columns="7">
-        <!-- Left group: F6 F4 F2 -->
-        <Border BorderBrush="#333333" BorderThickness="1,0,0,0" Background="#1a1a1a" Padding="4">
-          <Grid RowDefinitions="Auto,*">
-            <TextBlock Grid.Row="0" Text="{Binding SoftKeys[5].Key}" FontSize="10" Foreground="#888888" HorizontalAlignment="Center" Margin="0,2"/>
-            <TextBlock Grid.Row="1" Text="{Binding SoftKeys[5].Label}" FontSize="14" FontWeight="SemiBold" Foreground="#00aaff" HorizontalAlignment="Center" VerticalAlignment="Center" TextWrapping="Wrap" TextAlignment="Center"/>
-          </Grid>
-        </Border>
-        <Border BorderBrush="#333333" BorderThickness="1,0,0,0" Background="#1a1a1a" Padding="4">
-          <Grid RowDefinitions="Auto,*">
-            <TextBlock Grid.Row="0" Text="{Binding SoftKeys[3].Key}" FontSize="10" Foreground="#888888" HorizontalAlignment="Center" Margin="0,2"/>
-            <TextBlock Grid.Row="1" Text="{Binding SoftKeys[3].Label}" FontSize="14" FontWeight="SemiBold" Foreground="#00aaff" HorizontalAlignment="Center" VerticalAlignment="Center" TextWrapping="Wrap" TextAlignment="Center"/>
-          </Grid>
-        </Border>
-        <Border BorderBrush="#333333" BorderThickness="1,0,0,0" Background="#1a1a1a" Padding="4">
-          <Grid RowDefinitions="Auto,*">
-            <TextBlock Grid.Row="0" Text="{Binding SoftKeys[1].Key}" FontSize="10" Foreground="#888888" HorizontalAlignment="Center" Margin="0,2"/>
-            <TextBlock Grid.Row="1" Text="{Binding SoftKeys[1].Label}" FontSize="14" FontWeight="SemiBold" Foreground="#00aaff" HorizontalAlignment="Center" VerticalAlignment="Center" TextWrapping="Wrap" TextAlignment="Center"/>
-          </Grid>
-        </Border>
-        <!-- Centre: the up/down/left/right + Enter d-pad -->
-        <Border BorderBrush="#333333" BorderThickness="1,0,0,0" Background="#141414" Padding="4">
-          <StackPanel VerticalAlignment="Center">
-            <TextBlock Text="▲ ▼" FontSize="12" Foreground="#6a7b8a" HorizontalAlignment="Center"/>
-            <TextBlock Text="◀ OK ▶" FontSize="12" Foreground="#6a7b8a" HorizontalAlignment="Center"/>
-          </StackPanel>
-        </Border>
-        <!-- Right group: F1 F3 F5 -->
-        <Border BorderBrush="#333333" BorderThickness="1,0,0,0" Background="#1a1a1a" Padding="4">
-          <Grid RowDefinitions="Auto,*">
-            <TextBlock Grid.Row="0" Text="{Binding SoftKeys[0].Key}" FontSize="10" Foreground="#888888" HorizontalAlignment="Center" Margin="0,2"/>
-            <TextBlock Grid.Row="1" Text="{Binding SoftKeys[0].Label}" FontSize="14" FontWeight="SemiBold" Foreground="#00aaff" HorizontalAlignment="Center" VerticalAlignment="Center" TextWrapping="Wrap" TextAlignment="Center"/>
-          </Grid>
-        </Border>
-        <Border BorderBrush="#333333" BorderThickness="1,0,0,0" Background="#1a1a1a" Padding="4">
-          <Grid RowDefinitions="Auto,*">
-            <TextBlock Grid.Row="0" Text="{Binding SoftKeys[2].Key}" FontSize="10" Foreground="#888888" HorizontalAlignment="Center" Margin="0,2"/>
-            <TextBlock Grid.Row="1" Text="{Binding SoftKeys[2].Label}" FontSize="14" FontWeight="SemiBold" Foreground="#00aaff" HorizontalAlignment="Center" VerticalAlignment="Center" TextWrapping="Wrap" TextAlignment="Center"/>
-          </Grid>
-        </Border>
-        <Border BorderBrush="#333333" BorderThickness="1,0,0,0" Background="#1a1a1a" Padding="4">
-          <Grid RowDefinitions="Auto,*">
-            <TextBlock Grid.Row="0" Text="{Binding SoftKeys[4].Key}" FontSize="10" Foreground="#888888" HorizontalAlignment="Center" Margin="0,2"/>
-            <TextBlock Grid.Row="1" Text="{Binding SoftKeys[4].Label}" FontSize="14" FontWeight="SemiBold" Foreground="#00aaff" HorizontalAlignment="Center" VerticalAlignment="Center" TextWrapping="Wrap" TextAlignment="Center"/>
-          </Grid>
-        </Border>
-      </UniformGrid>
-    </Border>
+    <!-- Footer: reusable SoftKeyFooter from the Cr1140.Avalonia package.
+         Layout defaults to Physical (F6 F4 F2 · d-pad · F1 F3 F5); the Settings
+         screen (F2) toggles Physical/Natural via MainViewModel.FooterLayout. -->
+    <cr:SoftKeyFooter Grid.Row="2"
+                      Layout="{Binding FooterLayout}"
+                      F1="{Binding SoftKeys[0].Label}"
+                      F2="{Binding SoftKeys[1].Label}"
+                      F3="{Binding SoftKeys[2].Label}"
+                      F4="{Binding SoftKeys[3].Label}"
+                      F5="{Binding SoftKeys[4].Label}"
+                      F6="{Binding SoftKeys[5].Label}"/>
   </Grid>
 
 </UserControl>

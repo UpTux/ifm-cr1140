@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using Avalonia.Threading;
 using Cr1140.Avalonia.Input;
+using Cr1140.Avalonia.Controls;
 
 namespace Cr1140.AvaloniaDemo.ViewModels;
 
@@ -17,6 +18,7 @@ public sealed class MainViewModel : ViewModelBase
     private string _title;
     private object? _currentContent;
     private SoftKeyViewModel[] _softKeys;
+    private SoftKeyFooterLayout _footerLayout = SoftKeyFooterLayout.Physical;
 
     public MainViewModel(EvdevKeypadInput keypad)
     {
@@ -57,6 +59,20 @@ public sealed class MainViewModel : ViewModelBase
     }
 
     public IReadOnlyList<SoftKeyViewModel> SoftKeys => _softKeys;
+
+    public SoftKeyFooterLayout FooterLayout
+    {
+        get => _footerLayout;
+        private set => SetField(ref _footerLayout, value);
+    }
+
+    /// <summary>Toggle the soft-key footer between physical-keypad and natural (F1..F6) order.</summary>
+    internal void ToggleFooterLayout()
+    {
+        FooterLayout = _footerLayout == SoftKeyFooterLayout.Physical
+            ? SoftKeyFooterLayout.Natural
+            : SoftKeyFooterLayout.Physical;
+    }
 
     private void OnKeyPressed(KeypadKey key)
     {

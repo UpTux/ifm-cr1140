@@ -2,9 +2,9 @@
 
 ## Responsibility
 
-A **.NET class library** (`Cr1140.Avalonia`) providing a custom **Avalonia LinuxFramebuffer input backend** for keypad-only embedded panels. Thin, typed wrapper over Linux evdev that maps the CR1140/CR1141 gpio-keys device (`/dev/input/event1`) to a managed `KeypadKey` enum and raises `KeyPressed` events for application-driven navigation.
+A **.NET class library** (`Cr1140.Avalonia`) providing **CR1140 Avalonia LinuxFramebuffer support**: (1) a custom **input backend** for keypad-only embedded panels — thin, typed wrapper over Linux evdev that maps the CR1140/CR1141 gpio-keys device (`/dev/input/event1`) to a managed `KeypadKey` enum and raises `KeyPressed` events for application-driven navigation; and (2) a **`SoftKeyFooter` control** — a 6-key soft-key footer with two layout modes (Physical and Natural) for operator-panel UIs.
 
-**Bounded scope**: input only. This is NOT a full device SDK — it solves one gap (keypad input) in Avalonia's LinuxFramebuffer platform support. Rendering, layout, MVVM, and application logic are the consuming app's responsibility (see `cr1140-avalonia-demo` for a reference implementation).
+**Bounded scope**: CR1140 Avalonia LinuxFramebuffer support (input + soft-key control). This is NOT a full device SDK — it solves two gaps (keypad input and soft-key footer UI) in Avalonia's LinuxFramebuffer platform support. Rendering, layout, MVVM, and application logic are the consuming app's responsibility (see `cr1140-avalonia-demo` for a reference implementation).
 
 Hardware/OS ground truth: [`../docs/device-facts.md`](../docs/device-facts.md).
 
@@ -16,6 +16,13 @@ Hardware/OS ground truth: [`../docs/device-facts.md`](../docs/device-facts.md).
 |------|------|
 | `enum KeypadKey` | 11-member enum: `F1`, `F2`, `F3`, `F4`, `F5`, `F6`, `Up`, `Down`, `Left`, `Right`, `Enter`. |
 | `sealed class EvdevKeypadInput : IInputBackend, IDisposable` | Custom Avalonia input backend. Constructor takes a `devicePath` string (default `/dev/input/event1`). Raises `event Action<KeypadKey>? KeyPressed` on a background reader thread when a key-down event (`EV_KEY`, value `1`) is received. Implements `Initialize(IScreenInfoProvider, Action<RawInputEventArgs>)` (starts the evdev reader thread) and `SetInputRoot(IInputRoot)`. `Dispose()` stops the reader thread. |
+
+**Namespace**: `Cr1140.Avalonia.Controls`
+
+| Type | Role |
+|------|------|
+| `enum SoftKeyFooterLayout` | Layout mode for `SoftKeyFooter`: `Physical` (keypad-ordered: F6 F4 F2 · d-pad · F1 F3 F5) or `Natural` (F1–F6 left-to-right). |
+| `class SoftKeyFooter : Border` | A 6-key soft-key footer control. Properties: `Layout` (SoftKeyFooterLayout, default Physical), `ShowDPad` (bool, default true; Physical mode only), `F1`–`F6` (string? per-key labels), styling brushes (`DividerBrush`, `KeyForeground`, `LabelForeground`, `DPadForeground`, `DPadBackground`), d-pad text (`DPadLine1`, `DPadLine2`). Derives from `Border`, so `Background`, `BorderBrush`, `BorderThickness`, `Height` style the footer strip. Dark defaults suit an operator panel. |
 
 ### Evdev keycode → KeypadKey mapping
 
@@ -51,7 +58,8 @@ The library targets **Avalonia 11.3.20** and **.NET 8.0** (matching the referenc
 - **No Avalonia key injection**: The library does **not** inject Avalonia `KeyDown` events or manipulate focus. This is an intentional design decision to keep the input backend simple, explicit, and debuggable. Apps that need routed key events can extend `EvdevKeypadInput` to call `inputSink.Input(new RawKeyEventArgs(...))` in the `Initialize` method.
 - **Evdev read loop**: The reader thread blocks on synchronous reads of `/dev/input/event*` (no `epoll`, no async I/O). Evdev nodes are character devices and block until an event is available; the synchronous read is simpler and sufficient for a single low-rate input source.
 - **Key-down only**: Key-up (`value 0`) and repeat (`value 2`) events are silently ignored. Only key-down (`value 1`) raises `KeyPressed`. This matches the typical operator-panel UX: a button press triggers an action; release and repeat are not navigation events.
-- **NuGet package**: `Cr1140.Avalonia` (PackageId), version `0.1.0`. Package README is this file (`PackageReadmeFile`); license is `GPL-3.0-only` (dual-licensed GPL-3.0-only OR commercial, same as the workspace).
+- **NuGet package**: `Cr1140.Avalonia` (PackageId), version `0.2.0`. Package README is this file (`PackageReadmeFile`); license is `GPL-3.0-only` (dual-licensed GPL-3.0-only OR commercial, same as the workspace).
+- **SoftKeyFooter layout modes**: The footer's **Physical** layout (default) orders cells `F6 F4 F2 · d-pad · F1 F3 F5` to match the CR1140 keypad — each label sits directly over the button that triggers it. **Natural** layout (`F1..F6` left-to-right, no d-pad cell) is offered as an option for apps that prefer a conventional UI ordering. Layout is an **app-facing UI choice** — the keycode map (`EvdevKeypadInput`) remains CR1140-specific regardless of the footer's visual layout. The two concerns are independent: the input backend translates evdev codes to `KeypadKey` enum values; the footer control renders labels in an app-chosen order.
 
 ## Glossary
 

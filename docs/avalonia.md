@@ -29,12 +29,19 @@ only**. This SKU is **keypad-only** (no touch), so the demo includes a hand-roll
 
 ## Reusable package (Cr1140.Avalonia)
 
-The keypad input backend (`KeypadKey` enum + `EvdevKeypadInput : IInputBackend`) has
-been extracted from the demo into a standalone **NuGet package** (`Cr1140.Avalonia`,
-version 0.1.0) under `cr1140-avalonia/`. It is dual-licensed **GPL-3.0-only** (for
-open source) or **commercial** (contact UpTux UG <info@uptux.de>). The package targets
-.NET 8.0 and depends on Avalonia 11.3.20 + Avalonia.LinuxFramebuffer 11.3.20 only.
+The keypad input backend and reusable UI controls have been extracted from the demo
+into a standalone **NuGet package** (`Cr1140.Avalonia`, version **0.2.0**) under
+`cr1140-avalonia/`. It is dual-licensed **GPL-3.0-only** (for open source) or
+**commercial** (contact UpTux UG <info@uptux.de>). The package targets .NET 8.0 and
+depends on Avalonia 11.3.20 + Avalonia.LinuxFramebuffer 11.3.20 only.
 
+Version 0.2.0 adds the **`SoftKeyFooter`** control (namespace
+`Cr1140.Avalonia.Controls`), a 6-key soft-key footer with two layout modes:
+**Physical** (default: F6 F4 F2 · d-pad · F1 F3 F5, matching the CR1140 keypad so
+each label sits over its physical button) and **Natural** (F1..F6 left-to-right, no
+d-pad cluster). The demo wires it in `Views/MainView.axaml` as `<cr:SoftKeyFooter
+Layout="{Binding FooterLayout}" F1="..." ... F6="..." />`, and the Settings screen's
+F2 soft-key ('Footer') toggles the layout mode live; both modes verified on device.
 ### API (namespace `Cr1140.Avalonia.Input`)
 
 - **`enum KeypadKey`**: `F1`, `F2`, `F3`, `F4`, `F5`, `F6`, `Up`, `Down`, `Left`,
@@ -48,8 +55,9 @@ open source) or **commercial** (contact UpTux UG <info@uptux.de>). The package t
 
 Reads 24-byte `input_event` records from the evdev node, filters `EV_KEY` type=1
 value=1 (key-DOWN), and maps codes 59..64, 103, 105, 106, 108, 28 to `KeypadKey`.
-Verified on CR1140/CR1141 (aarch64 glibc 2.35, gpio-keys keypad).
-
+Verified on CR1140/CR1141 (aarch64 glibc 2.35, gpio-keys keypad). See
+[`cr1140-avalonia/README.md`](../cr1140-avalonia/README.md) for the full
+`SoftKeyFooter` API (styling properties, XAML usage).
 ### Usage
 
 Install from NuGet (once published):
@@ -89,7 +97,7 @@ The root `justfile` includes a `pack-avalonia` recipe:
 just pack-avalonia
 ```
 
-This runs `dotnet pack -c Release` and emits `dist/nuget/Cr1140.Avalonia.0.1.0.nupkg` (plus a `.snupkg` symbols package).
+This runs `dotnet pack -c Release` and emits `dist/nuget/Cr1140.Avalonia.0.2.0.nupkg` (plus a `.snupkg` symbols package).
 
 To publish to NuGet.org:
 
@@ -104,8 +112,8 @@ Or use the GitHub Actions workflow (`.github/workflows/nuget.yml`) triggered by 
 version tag (`avalonia-v*`):
 
 ```sh
-git tag avalonia-v0.1.0
-git push origin avalonia-v0.1.0
+git tag avalonia-v0.2.0
+git push origin avalonia-v0.2.0
 ```
 
 The workflow builds, packs, and publishes to NuGet.org automatically (requires

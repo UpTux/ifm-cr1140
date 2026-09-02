@@ -112,6 +112,7 @@ public sealed class NavigationController
 
             case Screen.Settings:
                 if (key == KeypadKey.F1) _settings.ToggleFieldbus();
+                else if (key == KeypadKey.F2) _main.ToggleFooterLayout();
                 break;
         }
     }
@@ -196,7 +197,7 @@ public sealed class NavigationController
             Screen.Knives => new[] { "Toggle", "", "", "", "", "Back" },
             Screen.Wrapping => new[] { "Start", "", "", "", "", "Back" },
             Screen.Telemetry => new[] { "", "", "", "", "", "Back" },
-            Screen.Settings => new[] { "Toggle Bus", "", "", "", "", "Back" },
+            Screen.Settings => new[] { "Toggle Bus", "Footer", "", "", "", "Back" },
             _ => new[] { "", "", "", "", "", "" }
         };
     }
