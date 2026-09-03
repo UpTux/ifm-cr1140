@@ -1,6 +1,6 @@
 # Cr1140.Avalonia
 
-Custom Avalonia components for keypad-only embedded panels: evdev input backend, soft-key footer control, fbdev **and** tear-free DRM/KMS output backends with display rotation, and a readable system-telemetry API.
+Custom Avalonia components for keypad-only embedded panels: evdev input backend, soft-key footer control, fbdev **and** tear-free DRM/KMS output backends with display rotation, status-LED and keypad-backlight control, and a readable system-telemetry API.
 
 ## What & Why
 
@@ -267,6 +267,51 @@ All telemetry types are **pure BCL** (no Avalonia dependency) and read from Linu
 `/proc` and `/sys`; on a non-Linux host every reader degrades to `null` / `"?"`
 rather than throwing, so the same code is safe to reference from cross-platform
 tooling. This mirrors the Rust SDK's `cr1140-sdk` `metrics` + `device` modules.
+
+## Status LED & keypad backlight
+
+The CR1140/CR1141 has an **RGB status light** and an **RGB backlight behind the
+keypad buttons**, both exposed by the kernel under `/sys/class/leds/`. The
+`Cr1140.Avalonia.Leds` namespace mirrors the Rust framework: `LedSysfs` is the thin
+sysfs primitive (`cr1140-hal`), and `LedMode`/`LedAnimation`/`LedDriver` are the
+animation layer (`cr1140-sdk`). Writes need write access to the `brightness` nodes
+(run as root or add a udev rule); off-device every call is a safe no-op — writes
+return `false`, reads return `null`.
+
+```csharp
+using Cr1140.Avalonia.Leds;
+
+// Status light: three binary channels (max 1). Green = ready, amber = warning.
+LedSysfs.SetTyped(Led.StatusRed, 0);
+LedSysfs.SetTyped(Led.StatusGreen, 1);
+LedSysfs.SetTyped(Led.StatusBlue, 0);
+
+// Keypad button backlight: one RGB color from three PWM channels (0–255).
+LedSysfs.SetKbdBacklight(255, 90, 0);       // orange
+
+// Animated keypad backlight — drive Tick() from a timer (e.g. a DispatcherTimer).
+var led = new LedDriver();
+led.SetColor((0, 128, 255));                 // base color
+led.SetMode(LedMode.Pulse);                  // 2 s breathe
+
+// ...on a ~30–60 Hz timer for a smooth pulse (1 Hz is enough for Blink/Solid):
+led.Tick();   // samples the curve, writes sysfs only when the value changes
+```
+
+### Namespace: `Cr1140.Avalonia.Leds`
+
+| Type | Role |
+|------|------|
+| `enum Led` | The six LED channels: `StatusRed/Green/Blue` (binary RGB status light, `Max` = 1) and `KbdRed/Green/Blue` (PWM RGB keypad backlight, `Max` = 255). |
+| `LedSysfs` | Typed sysfs read/write: `Name(Led)`, `Max(Led)`, `Set`/`Read` (raw name), `SetTyped(Led, value)` (clamps to `Max`), `SetKbdBacklight(r, g, b)`, `ListLeds()`. Writes → `bool`, reads → `uint?`. |
+| `enum LedMode` | Animation curve: `Solid`, `Dim` (50%), `Pulse` (2 s breathe), `Blink` (1 Hz), `Flash` (~4 Hz strobe), `Heartbeat` (double-beat). |
+| `LedAnimation` | Pure math (host-testable, no hardware): `Name(mode)`, `Level(mode, t)`, `Scale((r,g,b), level)`. |
+| `LedDriver` | Holds a base color + `LedMode`; `SetColor`/`SetMode`; `Tick()` writes the keypad backlight only when the computed color changes. New driver is off/`Solid`, no write until the first `Tick`. |
+
+`LedAnimation` is **pure BCL** (host-testable like `CpuSampler`); `LedSysfs`/`LedDriver`
+are the sysfs wirings. This mirrors the Rust `cr1140-hal` `sys` LED functions and the
+`cr1140-sdk` `led` module. The status light is set per-channel (`SetTyped`); the keypad
+backlight is one RGB color (`SetKbdBacklight` / `LedDriver`).
 
 ## Display rotation
 
