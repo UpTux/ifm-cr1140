@@ -36,14 +36,14 @@ beyond the minimum for input and font.
 | `Views/MainView.axaml` | Root layout: header (`Title`), body (`ContentControl Content="{Binding CurrentContent}"`), footer (`<cr:SoftKeyFooter>` control from Cr1140.Avalonia package with `Layout="{Binding FooterLayout}"` and `F1`..`F6` bindings; default Physical order = F6 F4 F2 · d-pad · F1 F3 F5 matching the keypad). Settings screen's F2 soft-key ('Footer') calls `ToggleFooterLayout()` to switch Physical/Natural at runtime. |
 | `Views/<Screen>View.axaml` | Per-screen view (XAML UserControl) with `x:DataType="vm:<Screen>ViewModel"` and compiled bindings. |
 | `App.axaml` | FluentTheme Dark, Inter font (`.WithInterFont()`), and the `<Application.DataTemplates>` map (each screen VM → its View). |
-| `Program.cs` | Avalonia startup: `AppBuilder.Configure<App>().StartLinuxFbDev(...)` with our `EvdevKeypadInput`, scaling=1, and explicit fbdev path `/dev/fb0`. Does NOT call `.UsePlatformDetect()` (we choose the platform). |
+| `Program.cs` | Avalonia startup: picks the output backend, constructs it, and calls `AppBuilder.Configure<App>().StartLinuxDirect(...)` with our `EvdevKeypadInput` and scaling=1. **DRM/KMS (`RotatingDrmOutput`) is the default** — tear-free double-buffer + page-flip on `/dev/dri/card0` (overridable with `--card=` / `CR1140_CARD`); force the single-buffered fbdev backend with `--fbdev` or `CR1140_OUTPUT=fbdev`. If DRM init fails (no device / not DRM master) it logs to stderr and falls back to fbdev so the panel still comes up. Rotation comes from `--rotate=90\|180\|270` or the `CR1140_ROTATE` env var (default: none), so the panel can be mounted in any orientation. Does NOT call `.UsePlatformDetect()` (we choose the platform). |
 
 ## Glossary
 
 | Term | Meaning |
 |------|---------|
 | Software rendering | Skia CPU rasterization; Avalonia's LinuxFramebuffer backend does NOT use OpenGL/EGL. The device has no working GL drivers for the Lima GPU on i.MX 8M Nano. |
-| DRM upgrade path | Future tear-free rendering via `StartLinuxDrm` (DRM/KMS DUMB buffer + atomic page-flip). The fbdev backend single-buffer writes can tear; DRM is the fix. |
+| DRM output path | Tear-free rendering via `RotatingDrmOutput` / `StartLinuxDrmRotated` (`Cr1140.Avalonia` v0.7.0): DRM/KMS DUMB double-buffer + page-flip on `/dev/dri/card0`, still software Skia. The fbdev backend's single-buffer writes can tear; DRM is the fix and is the **default** output (opt out with `--fbdev`). Verified on-device (page-flip alternation + tear-free), CPU/RAM on par with fbdev. |
 | Compiled bindings | Avalonia XAML bindings resolved at compile-time (`x:DataType`, `{Binding Prop}`), not reflection. Faster and type-safe. |
 | `ISingleViewApplicationLifetime` | Embedded app mode (no `Window` chrome, just a `UserControl` that fills the surface). Appropriate for fullscreen panel UIs. |
 | Cross-publish from macOS | `dotnet publish -r linux-arm64` produces aarch64 glibc binaries on macOS. NativeAOT is NOT possible (requires a Linux builder). |
@@ -53,7 +53,7 @@ beyond the minimum for input and font.
 ## Conventions / decisions
 
 - **Avalonia 11.3.20, .NET 10**: version is pinned; `<TargetFramework>net10.0</TargetFramework>`.
-- **Software Skia only**: fbdev backend, no GL. DRM/KMS (`StartLinuxDrm`) is the documented upgrade path for tear-free rendering (not implemented here).
+- **Software Skia only**: no GL (the i.MX 8M Nano has no usable GL driver). Both output backends render with CPU Skia — the tear-free `RotatingDrmOutput` (DRM/KMS DUMB double-buffer + page-flip, **default**) and `RotatingFbdevOutput` (fbdev, opt-in via `--fbdev`). Avalonia's GL-based `DrmOutput` is deliberately unused. On-device A/B (identical build, idle Menu) showed both at ~4% of one core and ~90 MB RSS, so DRM is default for its tear-free output at no measurable cost.
 - **Custom evdev input backend**: Avalonia's stock LinuxFramebuffer input is touch/pointer only. This SKU is keypad-only (no touch), so `EvdevKeypadInput` polls `/dev/input/event1` and raises `KeyPressed` events. The 24-byte `input_event` layout is verified on-device (`sizeof(struct input_event)` on aarch64 glibc 2.35).
 - **Cross-published from macOS**: `just publish-avalonia` runs `dotnet publish` on macOS, targeting `linux-arm64`. NativeAOT is skipped (requires a Linux builder; standard self-contained publish is sufficient for this demo).
 - **Compiled XAML bindings**: every `.axaml` file sets `x:DataType` and uses `{Binding ...}` (not `{ReflectionBinding}`); the csproj sets `<AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>`. No reflection `ViewLocator`.

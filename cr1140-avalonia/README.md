@@ -1,12 +1,12 @@
 # Cr1140.Avalonia
 
-Custom Avalonia LinuxFramebuffer components for keypad-only embedded panels: evdev input backend, soft-key footer control, and a readable system-telemetry API.
+Custom Avalonia components for keypad-only embedded panels: evdev input backend, soft-key footer control, fbdev **and** tear-free DRM/KMS output backends with display rotation, and a readable system-telemetry API.
 
 ## What & Why
 
 Avalonia's built-in LinuxFramebuffer input (`LibInput` / `EvDev`) provides **touch and pointer input only** — no keyboard or keypad support. The ifm CR1140/CR1141 ecomatDisplay (4.3", i.MX 8M Nano, 800×480 fbdev) is available as a **keypad-only SKU** (no touchscreen), which means a headless-framebuffer Avalonia UI cannot receive input from the device's gpio-keys keypad using the stock input backend.
 
-**Cr1140.Avalonia** (v0.5.0) provides a custom `IInputBackend` implementation that directly reads the keypad from `/dev/input/event1` via Linux evdev, maps the raw keycodes to a typed `KeypadKey` enum (F1–F6, arrow keys, Enter), and raises managed events for application-driven navigation: `KeyPressed` and `KeyReleased` for raw down/up, plus the derived gestures `KeyTapped`, `KeyDoubleTapped`, `KeyHeld` (long-press), and `KeyHolding` (press-and-hold auto-repeat). It also includes a **`SoftKeyFooter`** control — a 6-key soft-key footer with two layout modes (Physical and Natural) for operator-panel UIs — and a framework-agnostic **`SystemTelemetry`** collector for CPU / memory / temperature / uptime / load and **`DeviceInfo`** for OS identity and network state. The input and soft-key components have been **verified on real CR1140 hardware** rendering to `/dev/fb0` and receiving physical keypad input.
+**Cr1140.Avalonia** (v0.6.0) provides a custom `IInputBackend` implementation that directly reads the keypad from `/dev/input/event1` via Linux evdev, maps the raw keycodes to a typed `KeypadKey` enum (F1–F6, arrow keys, Enter), and raises managed events for application-driven navigation: `KeyPressed` and `KeyReleased` for raw down/up, plus the derived gestures `KeyTapped`, `KeyDoubleTapped`, `KeyHeld` (long-press), and `KeyHolding` (press-and-hold auto-repeat). It also includes a **`SoftKeyFooter`** control — a 6-key soft-key footer with two layout modes (Physical and Natural) for operator-panel UIs — **display rotation** (`RotatingFbdevOutput` / `StartLinuxFbDevRotated`) so the panel can be mounted in any of the four orientations, and a framework-agnostic **`SystemTelemetry`** collector for CPU / memory / temperature / uptime / load and **`DeviceInfo`** for OS identity and network state. The input, soft-key, and rotation components have been **verified on real CR1140 hardware** rendering to `/dev/fb0` and receiving physical keypad input.
 
 ## Install
 
@@ -21,6 +21,7 @@ dotnet add package Cr1140.Avalonia
 ## Requirements
 
 - **Framebuffer device**: `/dev/fb0` or another fbdev node (800×480 on the CR1140/CR1141).
+- **DRM device** (for the tear-free DRM path): `/dev/dri/card0`. The process must be able to become DRM master (own the display exclusively).
 - **Evdev keypad node**: `/dev/input/event1` (or another evdev node; path is configurable).
 - **Permissions**: The process must have **read access** to the evdev node. Run as root or add the user to the `input` group.
 - **Platform**: The Avalonia app must start via `StartLinuxFbDev(...)` or `StartLinuxDrm(...)` — a display server (X11/Wayland) is not used.
@@ -266,6 +267,101 @@ All telemetry types are **pure BCL** (no Avalonia dependency) and read from Linu
 `/proc` and `/sys`; on a non-Linux host every reader degrades to `null` / `"?"`
 rather than throwing, so the same code is safe to reference from cross-platform
 tooling. This mirrors the Rust SDK's `cr1140-sdk` `metrics` + `device` modules.
+
+## Display rotation
+
+Mount the panel in any orientation. `RotatingFbdevOutput` (namespace
+`Cr1140.Avalonia.Output`) is a LinuxFramebuffer output backend that renders Avalonia at
+the **logical (rotated) size** and rotate-blits each frame onto `/dev/fb0`, so layout,
+DPI, and hit-testing stay correct for the chosen orientation. Rotating 90°/270° swaps the
+surface to portrait (the native 800×480 landscape framebuffer becomes 480×800).
+
+Start with the `StartLinuxFbDevRotated` helper — the rotated counterpart of
+`StartLinuxFbDev`:
+
+```csharp
+using Avalonia;
+using Cr1140.Avalonia.Input;
+using Cr1140.Avalonia.Output;
+
+var keypad = new EvdevKeypadInput("/dev/input/event1");
+
+BuildAvaloniaApp().StartLinuxFbDevRotated(
+    args,
+    DisplayRotation.Clockwise90,   // None / Clockwise90 / Clockwise180 / Clockwise270
+    "/dev/fb0",
+    scaling: 1.0,
+    inputBackend: keypad);
+```
+
+`DisplayRotation` is the clockwise angle the rendered image is turned before it reaches the
+panel — pick the value that makes the UI upright for how the display is mounted. Or drive a
+`RotatingFbdevOutput` yourself and pass it to `StartLinuxDirect`:
+
+```csharp
+var output = new RotatingFbdevOutput("/dev/fb0", DisplayRotation.Clockwise270, scaling: 1.0);
+BuildAvaloniaApp().StartLinuxDirect(args, output, keypad);
+```
+
+The rotation math lives in the pure, dependency-free `FramebufferRotator`
+(`Rotate(src, srcStride, dst, dstStride, dstWidth, dstHeight, bytesPerPixel, rotation)`),
+which handles 32 bpp (Bgra/Rgba8888) and 16 bpp (Rgb565) and is unit-tested pixel-exact for
+all four angles. `RotatingFbdevOutput` uses the framebuffer's current mode (it does not
+change the display mode).
+
+> **Note:** rotation transforms the **output** only. Pointer/touch coordinates are not
+> rotated, which is fine for the keypad-only SKU (keys carry no screen coordinates); a touch
+> SKU using rotation would need a matching coordinate transform in the input path.
+
+The `cr1140-avalonia-demo` reads rotation from `--rotate=90|180|270` or the `CR1140_ROTATE`
+environment variable (default: no rotation).
+
+## DRM output (tear-free)
+
+The fbdev backend (`RotatingFbdevOutput`) is **single-buffered** and can tear during
+large redraws. `RotatingDrmOutput` is the tear-free alternative: it presents through the
+Linux **DRM/KMS** stack (`/dev/dri/card0`) using **double-buffered DUMB buffers** and a
+**page-flip**, while still rendering with **software Skia** — no GL required, which matters
+because the i.MX 8M Nano has no usable GL driver. It supports the same `DisplayRotation`
+values as the fbdev backend and reuses the same pure `FramebufferRotator`.
+
+Start with the `StartLinuxDrmRotated` helper — the DRM counterpart of
+`StartLinuxFbDevRotated`:
+
+```csharp
+using Avalonia;
+using Cr1140.Avalonia.Input;
+using Cr1140.Avalonia.Output;
+
+var keypad = new EvdevKeypadInput("/dev/input/event1");
+
+BuildAvaloniaApp().StartLinuxDrmRotated(
+    args,
+    DisplayRotation.None,          // None / Clockwise90 / Clockwise180 / Clockwise270
+    "/dev/dri/card0",              // or null for the default node
+    scaling: 1.0,
+    inputBackend: keypad);
+```
+
+Or drive a `RotatingDrmOutput` yourself and pass it to `StartLinuxDirect`:
+
+```csharp
+var output = new RotatingDrmOutput("/dev/dri/card0", DisplayRotation.None, scaling: 1.0);
+BuildAvaloniaApp().StartLinuxDirect(args, output, keypad);
+```
+
+**Requirements & limitations:**
+
+- The process must be **DRM master** — own the display exclusively (mask
+  `app-launcher` / `ifm-local-setup` / CODESYS first, as for the fbdev path).
+- Presents at **32 bpp XRGB8888** (`Bgra8888`); there is no 16 bpp path.
+- Picks the **first connected connector** and its preferred mode.
+- If the driver rejects legacy page-flip, it falls back to a per-frame `SETCRTC`
+  (tearing, but working).
+
+The `cr1140-avalonia-demo` uses this DRM path **by default**; opt out with `--fbdev` (or
+`CR1140_OUTPUT=fbdev`), and override the node with `--card=…` / `CR1140_CARD`. If DRM init
+fails it logs and falls back to the fbdev backend.
 
 ## Design Note
 

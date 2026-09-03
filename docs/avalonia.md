@@ -7,17 +7,19 @@ panel) deployment to the CR1140 device (aarch64 glibc 2.35, fbdev 800×480, keyp
 
 - SoC: **NXP i.MX 8M Nano** (aarch64, Cortex-A53)
 - OS: **eDB2 ecomatDisplay 2.0.0.11** (Yocto, systemd, **glibc 2.35**)
-- Display: **`/dev/fb0`**, 800×480, 32 bpp xRGB8888 (fbdev; DRM `/dev/dri/card0` also present but not used by this demo)
+- Display: **`/dev/fb0`**, 800×480, 32 bpp xRGB8888 (fbdev). DRM `/dev/dri/card0` also present and used **by default** via the package's tear-free DRM output path (fbdev is the opt-in fallback).
 - Input: **`/dev/input/event1`** (ifm-keypad: F1=59, F2=60, F3=61, F4=62, F5=63, F6=64, Up=103, Down=108, Left=105, Right=106, Enter=28)
 - Network: default IP (override via `CR1140_HOST` env var, current: `10.10.10.229`), SSH as `root`
 
 ## Approach
 
-**Avalonia 11.3.20** with the **LinuxFramebuffer backend** (software Skia) +
-**custom evdev keypad input** (`EvdevKeypadInput`). The app is cross-published
-**from macOS** as a self-contained `linux-arm64` binary (NativeAOT is NOT possible
-from macOS — needs a Linux builder). It runs in place of CODESYS and owns `/dev/fb0`
-exclusively.
+**Avalonia 11.3.20** with **software Skia** rendering + **custom evdev keypad input**
+(`EvdevKeypadInput`). Output goes through the **DRM/KMS backend by default**
+(`RotatingDrmOutput`, tear-free double-buffer + page-flip on `/dev/dri/card0`), with the
+single-buffered **LinuxFramebuffer** backend (`/dev/fb0`) as an opt-in fallback (`--fbdev`).
+The app is cross-published **from macOS** as a self-contained `linux-arm64` binary
+(NativeAOT is NOT possible from macOS — needs a Linux builder). It runs in place of CODESYS
+and owns the display exclusively.
 
 Stock Avalonia LinuxFramebuffer input (`LibInput`/`EvDev`) handles **touch/pointer
 only**. This SKU is **keypad-only** (no touch), so the demo includes a hand-rolled
@@ -67,6 +69,52 @@ codes 59..64, 103, 105, 106, 108, 28 to `KeypadKey`.
 Verified on CR1140/CR1141 (aarch64 glibc 2.35, gpio-keys keypad). See
 [`cr1140-avalonia/README.md`](../cr1140-avalonia/README.md) for the full
 `SoftKeyFooter` API (styling properties, XAML usage).
+
+### Display rotation (mount in any orientation)
+
+`Cr1140.Avalonia` v0.6.0 adds display rotation (namespace `Cr1140.Avalonia.Output`) so the
+panel can be mounted in any of the four orientations. `RotatingFbdevOutput` is a
+LinuxFramebuffer output backend that renders Avalonia at the logical (rotated) size and
+rotate-blits each frame onto `/dev/fb0`; `StartLinuxFbDevRotated` is the drop-in rotated
+counterpart of `StartLinuxFbDev`:
+
+```csharp
+using Cr1140.Avalonia.Output;
+
+BuildAvaloniaApp()
+    .StartLinuxFbDevRotated(args, DisplayRotation.Clockwise90, "/dev/fb0", 1.0, keypad);
+```
+
+`DisplayRotation` (`None` / `Clockwise90` / `Clockwise180` / `Clockwise270`) is the clockwise
+angle the image is turned before it reaches the panel; 90°/270° swap the surface to portrait
+(800×480 → 480×800). Rotation transforms the output only — pointer/touch coordinates are not
+remapped (irrelevant for the keypad-only SKU). The pure `FramebufferRotator` is unit-tested
+pixel-exact for all four angles; on device, `none`/`90`/`270` each produce a distinct frame.
+The demo selects rotation via `--rotate=90|180|270` or the `CR1140_ROTATE` env var.
+
+### DRM output (tear-free)
+
+`Cr1140.Avalonia` v0.7.0 adds a DRM/KMS output backend (`RotatingDrmOutput`, namespace
+`Cr1140.Avalonia.Output`) as the **tear-free** alternative to the single-buffered fbdev
+backend. It presents through the Linux DRM stack (`/dev/dri/card0`) using double-buffered
+DUMB buffers and a page-flip, while still rendering with **software Skia** (the i.MX 8M
+Nano has no usable GL driver, so Avalonia's GL-based `DrmOutput` is not an option). It
+supports the same `DisplayRotation` values as the fbdev backend. `StartLinuxDrmRotated` is
+the DRM counterpart of `StartLinuxFbDevRotated`:
+
+```csharp
+using Cr1140.Avalonia.Output;
+
+BuildAvaloniaApp()
+    .StartLinuxDrmRotated(args, DisplayRotation.None, "/dev/dri/card0", 1.0, keypad);
+```
+
+The demo selects the output backend at startup: **DRM by default**, or the fbdev backend via
+the `--fbdev` flag or `CR1140_OUTPUT=fbdev` (DRM node override: `--card=…` or `CR1140_CARD`).
+If DRM init fails (no device / not master) it logs to stderr and falls back to fbdev. Either
+path needs exclusive display ownership (DRM master) — the install script already masks
+`app-launcher`/`ifm-local-setup`/CODESYS.
+
 ### Usage
 
 Install from NuGet (once published):
@@ -226,10 +274,11 @@ The app is running but F1..F6 / arrow keys do nothing. Causes:
 
 ### Tearing / visual artifacts
 
-The fbdev backend is single-buffered and can tear during large redraws. The DRM/KMS
-backend (`StartLinuxDrm` + atomic page-flip) is the tear-free upgrade path; it's
-documented in Avalonia 11.3+ but not implemented in this demo. See
-`cr1140-avalonia-demo/CONTEXT.md` §Glossary "DRM upgrade path".
+The demo now renders through the DRM/KMS backend **by default** (`RotatingDrmOutput`,
+double-buffered DUMB + page-flip), which is tear-free — so tearing should not occur out of
+the box. If you forced the single-buffered fbdev backend (`--fbdev` / `CR1140_OUTPUT=fbdev`),
+large redraws can tear; drop the flag to return to DRM. See the "DRM output (tear-free)"
+section above and `cr1140-avalonia/CONTEXT.md` §Glossary (DRM / KMS, DUMB buffer, page-flip).
 
 ### Restore to stock
 
@@ -245,8 +294,8 @@ and daemon-reloads. The ifm setup screen returns on next boot.
 
 ## Next steps
 
-- **Tear-free rendering**: switch from `StartLinuxFbDev` to `StartLinuxDrm` (DRM/KMS
-  DUMB buffer + atomic page-flip). Requires Avalonia 11.3+ DRM backend.
+- **Tear-free rendering**: **done and default** — the demo renders via the DRM/KMS output
+  path (`RotatingDrmOutput`, DUMB buffer + page-flip, software Skia); `--fbdev` opts back out.
 - **NativeAOT**: run `dotnet publish -p:PublishAot=true` on a **Linux aarch64 builder**
   (not macOS) to shrink the deployed footprint (~90 MB → ~30 MB).
 - **Touch support (if SKU has touch)**: remove `EvdevKeypadInput` and use Avalonia's
