@@ -1,7 +1,7 @@
-using System;
 using Avalonia;
-using Avalonia.LinuxFramebuffer;
 using Cr1140.Avalonia.Input;
+using Cr1140.Avalonia.Output;
+using Avalonia.LinuxFramebuffer.Output;
 
 namespace Cr1140.AvaloniaDemo;
 
@@ -17,14 +17,70 @@ internal static class Program
             ? args[0]
             : "/dev/input/event1";
 
+        // Display rotation lets the panel be mounted in any orientation. Configure via
+        // `--rotate=90|180|270` or the CR1140_ROTATE env var; default is no rotation.
+        var rotation = ParseRotation(args, Environment.GetEnvironmentVariable("CR1140_ROTATE"));
+
+        // Output backend. DRM/KMS (`RotatingDrmOutput`) is the default: tear-free,
+        // double-buffered page-flip on `/dev/dri/card0` (override with `--card=…` /
+        // CR1140_CARD). Force the single-buffered fbdev backend with `--fbdev` or
+        // CR1140_OUTPUT=fbdev. If DRM init fails (no device / not master), fall back
+        // to fbdev so the panel still comes up.
+        var forceFbdev = args.Any(a => a == "--fbdev")
+            || string.Equals(Environment.GetEnvironmentVariable("CR1140_OUTPUT"), "fbdev", StringComparison.OrdinalIgnoreCase);
+        var fbdev = Environment.GetEnvironmentVariable("FRAMEBUFFER") ?? "/dev/fb0";
+
         Keypad = new EvdevKeypadInput(deviceNode);
 
-        return BuildAvaloniaApp().StartLinuxFbDev(
-            args,
-            Environment.GetEnvironmentVariable("FRAMEBUFFER") ?? "/dev/fb0",
-            1.0,
-            Keypad
-        );
+        IOutputBackend output;
+        if (forceFbdev)
+        {
+            output = new RotatingFbdevOutput(fbdev, rotation, 1.0);
+        }
+        else
+        {
+            var card = ParseOption(args, "--card=") ?? Environment.GetEnvironmentVariable("CR1140_CARD");
+            try
+            {
+                output = new RotatingDrmOutput(card, rotation, 1.0);
+            }
+            catch (Exception ex)
+            {
+                Console.Error.WriteLine($"[cr1140] DRM output unavailable ({ex.Message}); falling back to fbdev '{fbdev}'.");
+                output = new RotatingFbdevOutput(fbdev, rotation, 1.0);
+            }
+        }
+
+        return BuildAvaloniaApp().StartLinuxDirect(args, output, Keypad);
+    }
+
+    private static string? ParseOption(string[] args, string flag)
+    {
+        foreach (var arg in args)
+        {
+            if (arg.StartsWith(flag, StringComparison.Ordinal))
+                return arg.Substring(flag.Length);
+        }
+        return null;
+    }
+
+    private static DisplayRotation ParseRotation(string[] args, string? env)
+    {
+        var value = env;
+        foreach (var arg in args)
+        {
+            const string flag = "--rotate=";
+            if (arg.StartsWith(flag, StringComparison.Ordinal))
+                value = arg.Substring(flag.Length);
+        }
+
+        return value switch
+        {
+            "90" => DisplayRotation.Clockwise90,
+            "180" => DisplayRotation.Clockwise180,
+            "270" => DisplayRotation.Clockwise270,
+            _ => DisplayRotation.None,
+        };
     }
 
     public static AppBuilder BuildAvaloniaApp()
