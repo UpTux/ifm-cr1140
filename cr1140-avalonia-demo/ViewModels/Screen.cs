@@ -13,5 +13,6 @@ public enum Screen
     Wrapping,
     Telemetry,
     Settings,
-    KeyEvents
+    KeyEvents,
+    Leds
 }
