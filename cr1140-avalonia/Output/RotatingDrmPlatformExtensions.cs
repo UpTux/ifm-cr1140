@@ -1,4 +1,5 @@
 using Avalonia;
+using Cr1140.Avalonia.Diagnostics;
 using Avalonia.LinuxFramebuffer.Input;
 
 namespace Cr1140.Avalonia.Output;
@@ -20,6 +21,7 @@ public static class RotatingDrmPlatformExtensions
     /// <param name="rotation">Clockwise rotation to apply to the display.</param>
     /// <param name="card">DRM primary node, or null for <c>/dev/dri/card0</c>.</param>
     /// <param name="scaling">Layout scale factor.</param>
+    /// <param name="stats">Optional performance recorder.</param>
     /// <param name="inputBackend">Optional input backend (e.g. <c>EvdevKeypadInput</c>).</param>
     /// <returns>The application exit code.</returns>
     public static int StartLinuxDrmRotated(
@@ -28,6 +30,7 @@ public static class RotatingDrmPlatformExtensions
         DisplayRotation rotation = DisplayRotation.None,
         string? card = null,
         double scaling = 1.0,
+        FrameStatsRecorder? stats = null,
         IInputBackend? inputBackend = null)
-        => builder.StartLinuxDirect(args, new RotatingDrmOutput(card, rotation, scaling), inputBackend);
+        => builder.StartLinuxDirect(args, new RotatingDrmOutput(card, rotation, scaling, stats), inputBackend);
 }

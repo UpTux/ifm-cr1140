@@ -1,4 +1,5 @@
 using Avalonia;
+using Cr1140.Avalonia.Diagnostics;
 using Cr1140.Avalonia.Input;
 using Cr1140.Avalonia.Output;
 using Avalonia.LinuxFramebuffer.Output;
@@ -8,6 +9,8 @@ namespace Cr1140.AvaloniaDemo;
 internal static class Program
 {
     public static EvdevKeypadInput Keypad = null!;
+    public static FrameStatsRecorder FrameStats = null!;
+    public static bool PerfStartVisible;
 
     [STAThread]
     public static int Main(string[] args)
@@ -31,23 +34,26 @@ internal static class Program
         var fbdev = Environment.GetEnvironmentVariable("FRAMEBUFFER") ?? "/dev/fb0";
 
         Keypad = new EvdevKeypadInput(deviceNode);
+        FrameStats = new FrameStatsRecorder();
+        PerfStartVisible = args.Any(a => a == "--perf")
+            || string.Equals(Environment.GetEnvironmentVariable("CR1140_PERF"), "1", StringComparison.OrdinalIgnoreCase);
 
         IOutputBackend output;
         if (forceFbdev)
         {
-            output = new RotatingFbdevOutput(fbdev, rotation, 1.0);
+            output = new RotatingFbdevOutput(fbdev, rotation, 1.0, FrameStats);
         }
         else
         {
             var card = ParseOption(args, "--card=") ?? Environment.GetEnvironmentVariable("CR1140_CARD");
             try
             {
-                output = new RotatingDrmOutput(card, rotation, 1.0);
+                output = new RotatingDrmOutput(card, rotation, 1.0, FrameStats);
             }
             catch (Exception ex)
             {
                 Console.Error.WriteLine($"[cr1140] DRM output unavailable ({ex.Message}); falling back to fbdev '{fbdev}'.");
-                output = new RotatingFbdevOutput(fbdev, rotation, 1.0);
+                output = new RotatingFbdevOutput(fbdev, rotation, 1.0, FrameStats);
             }
         }
 

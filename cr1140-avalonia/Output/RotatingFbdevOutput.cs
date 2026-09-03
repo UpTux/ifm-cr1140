@@ -1,4 +1,5 @@
 using System.Runtime.InteropServices;
+using Cr1140.Avalonia.Diagnostics;
 using Avalonia;
 using Avalonia.Controls.Platform.Surfaces;
 using Avalonia.LinuxFramebuffer.Output;
@@ -35,6 +36,7 @@ public sealed class RotatingFbdevOutput : IOutputBackend, IFramebufferPlatformSu
     private const uint FBIO_WAITFORVSYNC = 0x40044620;
 
     private readonly DisplayRotation _rotation;
+    private readonly FrameStatsRecorder? _stats;
     private readonly object _lock = new();
 
     private int _fd;
@@ -65,9 +67,11 @@ public sealed class RotatingFbdevOutput : IOutputBackend, IFramebufferPlatformSu
     /// <param name="fileName">Framebuffer node, or null for <c>$FRAMEBUFFER</c> / <c>/dev/fb0</c>.</param>
     /// <param name="rotation">Clockwise rotation to apply to every frame.</param>
     /// <param name="scaling">Initial layout scale factor.</param>
-    public RotatingFbdevOutput(string? fileName = null, DisplayRotation rotation = DisplayRotation.None, double scaling = 1.0)
+    /// <param name="stats">Optional recorder fed one <c>FrameSample</c> per presented frame; <c>null</c> disables instrumentation.</param>
+    public RotatingFbdevOutput(string? fileName = null, DisplayRotation rotation = DisplayRotation.None, double scaling = 1.0, FrameStatsRecorder? stats = null)
     {
         _rotation = rotation;
+        _stats = stats;
         Scaling = scaling;
 
         var path = fileName ?? Environment.GetEnvironmentVariable("FRAMEBUFFER") ?? "/dev/fb0";
@@ -125,6 +129,7 @@ public sealed class RotatingFbdevOutput : IOutputBackend, IFramebufferPlatformSu
         var backBufferLength = _logicalStrideBytes * _logicalHeight;
         _backBuffer = Marshal.AllocHGlobal(backBufferLength);
         new Span<byte>((void*)_backBuffer, backBufferLength).Clear();
+        _stats?.SetPresentInfo("fbdev", _rotation, new PixelSize(_logicalWidth, _logicalHeight));
     }
 
     /// <inheritdoc />
@@ -139,6 +144,7 @@ public sealed class RotatingFbdevOutput : IOutputBackend, IFramebufferPlatformSu
         try
         {
             var dpi = new Vector(96, 96) * Scaling;
+            _stats?.BeginRender();
             return new LockedFramebuffer(
                 _backBuffer,
                 new PixelSize(_logicalWidth, _logicalHeight),
@@ -147,9 +153,11 @@ public sealed class RotatingFbdevOutput : IOutputBackend, IFramebufferPlatformSu
                 _format,
                 () =>
                 {
+                    _stats?.BeginPresent();
                     try
                     {
-                        BlitToDevice();
+                        var vsync = BlitToDevice();
+                        _stats?.EndFrame(vsync);
                     }
                     finally
                     {
@@ -164,11 +172,11 @@ public sealed class RotatingFbdevOutput : IOutputBackend, IFramebufferPlatformSu
         }
     }
 
-    private unsafe void BlitToDevice()
+    private unsafe bool BlitToDevice()
     {
         // Best-effort vsync wait (ignored if the driver doesn't support it), mirroring the
         // stock FbDevBackBuffer blit.
-        ioctl(_fd, FBIO_WAITFORVSYNC, null);
+        var rc = ioctl(_fd, FBIO_WAITFORVSYNC, null);
 
         var src = new ReadOnlySpan<byte>((void*)_backBuffer, _logicalStrideBytes * _logicalHeight);
         var dst = new Span<byte>((void*)_mappedAddress, checked((int)_mappedLength));
@@ -177,8 +185,8 @@ public sealed class RotatingFbdevOutput : IOutputBackend, IFramebufferPlatformSu
             dst, _physStrideBytes,
             _physWidth, _physHeight,
             _bytesPerPixel, _rotation);
+        return rc == 0;
     }
-
     /// <inheritdoc />
     public void Dispose()
     {

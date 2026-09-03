@@ -313,6 +313,82 @@ are the sysfs wirings. This mirrors the Rust `cr1140-hal` `sys` LED functions an
 `cr1140-sdk` `led` module. The status light is set per-channel (`SetTyped`); the keypad
 backlight is one RGB color (`SetKbdBacklight` / `LedDriver`).
 
+
+## Performance overlay
+
+A **game-engine-style diagnostics HUD** for on-panel performance monitoring. The overlay
+shows **real FPS and frame timing** sourced directly from the output backends
+(`RotatingFbdevOutput` / `RotatingDrmOutput`) — Render time (Skia CPU rasterize),
+Present time (rotate-blit + page-flip/vsync wait), Total cadence, and actual V-Sync state —
+along with sparkline graphs and an optional system-info block (CPU, memory, SoC temp).
+
+Because the i.MX 8M Nano has **no GPU** (software Skia only), the overlay repurposes the
+typical "GPU" row to show the **Present** path (rotate-blit + vsync), which is the other
+half of the frame budget.
+
+### Usage
+
+Create a `FrameStatsRecorder` and pass it to your output backend:
+
+```csharp
+using Avalonia;
+using Cr1140.Avalonia.Diagnostics;
+using Cr1140.Avalonia.Input;
+using Cr1140.Avalonia.Output;
+
+var stats = new FrameStatsRecorder();
+var keypad = new EvdevKeypadInput("/dev/input/event1");
+
+// DRM path (tear-free)
+BuildAvaloniaApp().StartLinuxDrmRotated(
+    args,
+    DisplayRotation.None,
+    card: "/dev/dri/card0",
+    scaling: 1.0,
+    inputBackend: keypad,
+    stats: stats);
+
+// Or fbdev path (single-buffered)
+// BuildAvaloniaApp().StartLinuxFbDevRotated(
+//     args,
+//     DisplayRotation.None,
+//     fbdev: "/dev/fb0",
+//     scaling: 1.0,
+//     inputBackend: keypad,
+//     stats: stats);
+```
+
+Then attach the overlay to your view's `TopLevel` (in `OnAttachedToVisualTree`):
+
+```csharp
+using Avalonia.Controls;
+using Cr1140.Avalonia.Diagnostics;
+
+protected override void OnAttachedToVisualTree(TreeAttachmentEventArgs e)
+{
+    base.OnAttachedToVisualTree(e);
+
+    TopLevel.GetTopLevel(this)!.AttachPerfOverlay(stats, new PerfOverlayOptions
+    {
+        ToggleKeypad = keypad,
+        ToggleKey = KeypadKey.F5,
+        ToggleGesture = PerfOverlayToggleGesture.DoubleTapped,
+        ShowSystemInfo = true,
+    });
+}
+```
+
+The overlay is non-interactive and renders on the `TopLevel`'s `OverlayLayer`.
+
+**Note (retained-mode FPS):** Avalonia is **retained-mode** — the UI only redraws when
+something changes. FPS is meaningful **only while the overlay is driving redraw** (via
+`RedrawInterval` > 0 in `PerfOverlayOptions`); otherwise the panel idles and shows
+whatever FPS the app's own activity produces. The default `RedrawInterval` is 100 ms (10 Hz).
+
+**Note (self-perturbation):** The HUD **self-perturbs** the frame time it measures — drawing
+the overlay itself consumes CPU and elongates the frame. This is inherent to any on-panel
+diagnostics HUD and is kept light (the overlay is custom-drawn and text-only; no heavy controls).
+
 ## Display rotation
 
 Mount the panel in any orientation. `RotatingFbdevOutput` (namespace

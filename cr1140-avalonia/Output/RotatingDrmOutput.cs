@@ -1,4 +1,5 @@
 using System.Runtime.InteropServices;
+using Cr1140.Avalonia.Diagnostics;
 using Avalonia;
 using Avalonia.Controls.Platform.Surfaces;
 using Avalonia.LinuxFramebuffer.Output;
@@ -55,6 +56,7 @@ public sealed class RotatingDrmOutput : IOutputBackend, IFramebufferPlatformSurf
     private static uint Iowr(uint nr, uint size) => (3u << 30) | ((size & 0x3FFF) << 16) | (DrmIoctlBase << 8) | nr;
 
     private readonly DisplayRotation _rotation;
+    private readonly FrameStatsRecorder? _stats;
     private readonly object _lock = new();
 
     private int _fd;
@@ -91,9 +93,11 @@ public sealed class RotatingDrmOutput : IOutputBackend, IFramebufferPlatformSurf
     /// <param name="card">DRM primary node, or null for <c>/dev/dri/card0</c>.</param>
     /// <param name="rotation">Clockwise rotation to apply to every frame.</param>
     /// <param name="scaling">Initial layout scale factor.</param>
-    public RotatingDrmOutput(string? card = null, DisplayRotation rotation = DisplayRotation.None, double scaling = 1.0)
+    /// <param name="stats">Optional recorder fed one <c>FrameSample</c> per presented frame; <c>null</c> disables instrumentation.</param>
+    public RotatingDrmOutput(string? card = null, DisplayRotation rotation = DisplayRotation.None, double scaling = 1.0, FrameStatsRecorder? stats = null)
     {
         _rotation = rotation;
+        _stats = stats;
         Scaling = scaling;
 
         var path = card ?? "/dev/dri/card0";
@@ -145,6 +149,7 @@ public sealed class RotatingDrmOutput : IOutputBackend, IFramebufferPlatformSurf
         var backBufferLength = _logicalStrideBytes * _logicalHeight;
         _backBuffer = Marshal.AllocHGlobal(backBufferLength);
         new Span<byte>((void*)_backBuffer, backBufferLength).Clear();
+        _stats?.SetPresentInfo("DRM (tear-free)", _rotation, new PixelSize(_logicalWidth, _logicalHeight));
     }
 
     /// <inheritdoc />
@@ -159,6 +164,7 @@ public sealed class RotatingDrmOutput : IOutputBackend, IFramebufferPlatformSurf
         try
         {
             var dpi = new Vector(96, 96) * Scaling;
+            _stats?.BeginRender();
             return new LockedFramebuffer(
                 _backBuffer,
                 new PixelSize(_logicalWidth, _logicalHeight),
@@ -167,9 +173,11 @@ public sealed class RotatingDrmOutput : IOutputBackend, IFramebufferPlatformSurf
                 _format,
                 () =>
                 {
+                    _stats?.BeginPresent();
                     try
                     {
-                        Present();
+                        var vsync = Present();
+                        _stats?.EndFrame(vsync);
                     }
                     finally
                     {
@@ -184,7 +192,7 @@ public sealed class RotatingDrmOutput : IOutputBackend, IFramebufferPlatformSurf
         }
     }
 
-    private unsafe void Present()
+    private unsafe bool Present()
     {
         int back = _frontIndex ^ 1;
         var target = _dumb[back];
@@ -200,15 +208,15 @@ public sealed class RotatingDrmOutput : IOutputBackend, IFramebufferPlatformSurf
         if (_supportsFlip && PageFlip(target.FbId))
         {
             _frontIndex = back;
-            return;
+            return true;
         }
 
         // Driver rejected the page-flip: fall back to a (tearing, but working) modeset present.
         _supportsFlip = false;
         SetCrtc(target.FbId);
         _frontIndex = back;
+        return false;
     }
-
     // --- KMS setup ---------------------------------------------------------------------
 
     private unsafe (uint[] crtcs, uint[] connectors) GetResources()

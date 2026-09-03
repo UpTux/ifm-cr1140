@@ -111,4 +111,123 @@ public static class DeviceInfo
 
         return null;
     }
+
+    /// <summary>
+    /// CPU model string: first <c>model name</c> or <c>Hardware</c> line from
+    /// <c>/proc/cpuinfo</c>, or <c>/proc/device-tree/model</c> as fallback.
+    /// </summary>
+    /// <returns>
+    /// The CPU model, or <see langword="null"/> if both sources are unavailable.
+    /// </returns>
+    public static string? CpuModel()
+    {
+        try
+        {
+            var cpuinfo = ProcFs.TryRead("/proc/cpuinfo") ?? string.Empty;
+            var deviceTreeModel = ProcFs.TryRead("/proc/device-tree/model");
+            
+            // Strip trailing NUL and whitespace from device-tree model
+            if (deviceTreeModel is not null)
+            {
+                deviceTreeModel = deviceTreeModel.TrimEnd('\0', ' ', '\t', '\n', '\r');
+            }
+            
+            return ParseCpuModel(cpuinfo, deviceTreeModel);
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// CPU count: the number of <c>processor</c> entries in <c>/proc/cpuinfo</c>.
+    /// </summary>
+    /// <returns>
+    /// The CPU count, or <see langword="null"/> if <c>/proc/cpuinfo</c> is unavailable
+    /// or contains no processor entries.
+    /// </returns>
+    public static int? CpuCount()
+    {
+        try
+        {
+            var cpuinfo = ProcFs.TryRead("/proc/cpuinfo");
+            return cpuinfo is null ? null : ParseCpuCount(cpuinfo);
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// Parse CPU model from <c>/proc/cpuinfo</c> content, with
+    /// <c>/proc/device-tree/model</c> as fallback.
+    /// </summary>
+    /// <param name="cpuinfo">The contents of <c>/proc/cpuinfo</c>.</param>
+    /// <param name="deviceTreeModel">
+    /// The contents of <c>/proc/device-tree/model</c>, or <see langword="null"/> if unavailable.
+    /// </param>
+    /// <returns>
+    /// The first <c>model name</c> or <c>Hardware</c> value from <paramref name="cpuinfo"/>
+    /// (case-insensitive), or <paramref name="deviceTreeModel"/> if no such line exists,
+    /// or <see langword="null"/> if both sources are empty.
+    /// </returns>
+    public static string? ParseCpuModel(string cpuinfo, string? deviceTreeModel)
+    {
+        foreach (var line in cpuinfo.Split('\n'))
+        {
+            var idx = line.IndexOf(':');
+            if (idx < 0)
+            {
+                continue;
+            }
+
+            var key = line.Substring(0, idx).Trim();
+            if (string.Equals(key, "model name", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(key, "Hardware", StringComparison.OrdinalIgnoreCase))
+            {
+                return line.Substring(idx + 1).Trim();
+            }
+        }
+
+        // Fall back to device-tree model if available (strip trailing NUL/whitespace).
+        var dt = deviceTreeModel?.TrimEnd('\0', ' ', '\t', '\n', '\r');
+        if (!string.IsNullOrEmpty(dt))
+        {
+            return dt;
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// Parse CPU count from <c>/proc/cpuinfo</c> content by counting
+    /// <c>processor</c> entries.
+    /// </summary>
+    /// <param name="cpuinfo">The contents of <c>/proc/cpuinfo</c>.</param>
+    /// <returns>
+    /// The number of <c>processor</c> lines (case-insensitive), or
+    /// <see langword="null"/> if none are found.
+    /// </returns>
+    public static int? ParseCpuCount(string cpuinfo)
+    {
+        var count = 0;
+        foreach (var line in cpuinfo.Split('\n'))
+        {
+            var idx = line.IndexOf(':');
+            if (idx < 0)
+            {
+                continue;
+            }
+
+            var key = line.Substring(0, idx).Trim();
+            if (string.Equals(key, "processor", StringComparison.OrdinalIgnoreCase))
+            {
+                count++;
+            }
+        }
+
+        return count > 0 ? count : null;
+    }
 }
