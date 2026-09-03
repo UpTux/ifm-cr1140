@@ -20,7 +20,8 @@ public sealed class MenuViewModel : ViewModelBase
             new("Wrapping"),
             new("Telemetry"),
             new("Settings"),
-            new("Key Events")
+            new("Key Events"),
+            new("LEDs")
         };
         SelectedIndex = 0;
     }

@@ -18,6 +18,7 @@ public sealed class NavigationController
     private readonly TelemetryViewModel _telemetry;
     private readonly SettingsViewModel _settings;
     private readonly KeyEventsViewModel _keyEvents;
+    private readonly LedsViewModel _leds;
 
     private Screen _current;
 
@@ -32,6 +33,7 @@ public sealed class NavigationController
         _telemetry = new TelemetryViewModel();
         _settings = new SettingsViewModel();
         _keyEvents = new KeyEventsViewModel();
+        _leds = new LedsViewModel();
 
         _current = Screen.Menu;
     }
@@ -123,15 +125,28 @@ public sealed class NavigationController
             case Screen.KeyEvents:
                 // No per-key actions — every press is surfaced by the KeyEvents demo screen.
                 break;
+            case Screen.Leds:
+                if (key == KeypadKey.F1) _leds.CycleStatus();
+                else if (key == KeypadKey.F2) _leds.CycleBacklight();
+                else if (key == KeypadKey.F3) _leds.CycleMode();
+                break;
         }
     }
 
     private void OpenScreen(Screen screen)
     {
+        var previous = _current;
         _current = screen;
+
         // Start each visit to the demo screen from a clean slate.
         if (screen == Screen.KeyEvents)
             _keyEvents.Reset();
+
+        // The keypad-backlight animation only ticks while the LEDs screen is open.
+        if (previous == Screen.Leds && screen != Screen.Leds)
+            _leds.Deactivate();
+        if (screen == Screen.Leds)
+            _leds.Activate();
 
         // Update MainViewModel state
         _main.UpdateScreen(
@@ -152,6 +167,7 @@ public sealed class NavigationController
             4 => Screen.Telemetry,
             5 => Screen.Settings,
             6 => Screen.KeyEvents,
+            7 => Screen.Leds,
             _ => Screen.Menu
         };
     }
@@ -167,6 +183,7 @@ public sealed class NavigationController
             Screen.Wrapping => "Wrapping",
             Screen.Telemetry => "Telemetry",
             Screen.KeyEvents => "Key Events",
+            Screen.Leds => "LEDs",
             Screen.Settings => "Settings",
             _ => "Baler"
         };
@@ -184,6 +201,7 @@ public sealed class NavigationController
             Screen.Telemetry => _telemetry,
             Screen.Settings => _settings,
             Screen.KeyEvents => _keyEvents,
+            Screen.Leds => _leds,
             _ => _menu
         };
     }
@@ -214,6 +232,7 @@ public sealed class NavigationController
             Screen.Telemetry => new[] { "", "", "", "", "", "Back" },
             Screen.Settings => new[] { "Toggle Bus", "Footer", "", "", "", "Back" },
             Screen.KeyEvents => new[] { "", "", "", "", "", "Back" },
+            Screen.Leds => new[] { "Status", "Kbd Color", "Mode", "", "", "Back" },
             _ => new[] { "", "", "", "", "", "" }
         };
     }
