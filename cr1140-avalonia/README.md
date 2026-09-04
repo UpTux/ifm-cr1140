@@ -1,12 +1,12 @@
 # Cr1140.Avalonia
 
-Custom Avalonia components for keypad-only embedded panels: evdev input backend, soft-key footer control, fbdev **and** tear-free DRM/KMS output backends with display rotation, status-LED and keypad-backlight control, and a readable system-telemetry API.
+Custom Avalonia components for keypad-only embedded panels: evdev keypad input backend (with gestures), soft-key footer control, fbdev **and** tear-free DRM/KMS output backends with display rotation, status-LED and keypad-backlight control, **display-brightness (backlight) control**, a readable system-telemetry API, and a performance/diagnostics overlay.
 
 ## What & Why
 
 Avalonia's built-in LinuxFramebuffer input (`LibInput` / `EvDev`) provides **touch and pointer input only** — no keyboard or keypad support. The ifm CR1140/CR1141 ecomatDisplay (4.3", i.MX 8M Nano, 800×480 fbdev) is available as a **keypad-only SKU** (no touchscreen), which means a headless-framebuffer Avalonia UI cannot receive input from the device's gpio-keys keypad using the stock input backend.
 
-**Cr1140.Avalonia** (v0.6.0) provides a custom `IInputBackend` implementation that directly reads the keypad from `/dev/input/event1` via Linux evdev, maps the raw keycodes to a typed `KeypadKey` enum (F1–F6, arrow keys, Enter), and raises managed events for application-driven navigation: `KeyPressed` and `KeyReleased` for raw down/up, plus the derived gestures `KeyTapped`, `KeyDoubleTapped`, `KeyHeld` (long-press), and `KeyHolding` (press-and-hold auto-repeat). It also includes a **`SoftKeyFooter`** control — a 6-key soft-key footer with two layout modes (Physical and Natural) for operator-panel UIs — **display rotation** (`RotatingFbdevOutput` / `StartLinuxFbDevRotated`) so the panel can be mounted in any of the four orientations, and a framework-agnostic **`SystemTelemetry`** collector for CPU / memory / temperature / uptime / load and **`DeviceInfo`** for OS identity and network state. The input, soft-key, and rotation components have been **verified on real CR1140 hardware** rendering to `/dev/fb0` and receiving physical keypad input.
+**Cr1140.Avalonia** provides a custom `IInputBackend` implementation that directly reads the keypad from `/dev/input/event1` via Linux evdev, maps the raw keycodes to a typed `KeypadKey` enum (F1–F6, arrow keys, Enter), and raises managed events for application-driven navigation: `KeyPressed` and `KeyReleased` for raw down/up, plus the derived gestures `KeyTapped`, `KeyDoubleTapped`, `KeyHeld` (long-press), and `KeyHolding` (press-and-hold auto-repeat). It also includes a **`SoftKeyFooter`** control — a 6-key soft-key footer with two layout modes (Physical and Natural) for operator-panel UIs — two software (Skia) **output backends with display rotation** (`RotatingFbdevOutput` on `/dev/fb0` and the tear-free `RotatingDrmOutput` on `/dev/dri/card0`, via `StartLinuxFbDevRotated` / `StartLinuxDrmRotated`) so the panel can be mounted in any of the four orientations, **onboard-LED control** (`LedSysfs`/`LedDriver` over `/sys/class/leds`: RGB status light + RGB keypad backlight with animation modes), **display-brightness control** (`Backlight` over `/sys/class/backlight`, with raw and 0–100 % helpers), a framework-agnostic **`SystemTelemetry`** collector for CPU / memory / temperature / uptime / load and **`DeviceInfo`** for OS identity and network state, and a non-interactive **`PerfOverlay`** that shows real FPS / frame timing sourced from the output backends. Components are **verified on real CR1140 hardware** rendering to the panel and receiving physical keypad input.
 
 ## Install
 
@@ -529,10 +529,11 @@ The library does **not** currently inject Avalonia `KeyDown` events or manipulat
 
 See **[`cr1140-avalonia-demo`](https://github.com/UpTux/ifm-cr1140/tree/main/cr1140-avalonia-demo)** in the repository for a complete reference implementation:
 - Menu-driven navigation (Up/Down/Enter)
-- Multiple screens (Dashboard, Bale Counter, Knives, Wrapping, Telemetry, Settings)
+- Multiple screens (Dashboard, Bale Counter, Knives, Wrapping, Telemetry, Settings, Key Events, LEDs, Brightness)
 - Soft-key footer driven by F1–F6
 - MVVM with `INotifyPropertyChanged` and compiled XAML bindings
 - A Telemetry screen driven by `SystemTelemetry` + `DeviceInfo` (live CPU/memory/temperature/uptime/load and eth0/can0 state, refreshed at 1 Hz)
+- A Brightness screen that adjusts the display backlight via `Cr1140.Avalonia.Display` (`Backlight.SetPercent`) — Up/Down or F1/F2 in 10 % steps, with a 10 % safety floor
 - Verified running on the physical CR1140 device
 
 ## License
