@@ -67,6 +67,7 @@ beyond the minimum for input and font.
 - **FluentTheme Dark + Inter font**: App.axaml sets `RequestedThemeVariant="Dark"` and calls `.WithInterFont()` in Program.cs.
 - **Deployed to `/home/cds-apps/cr1140-avalonia-demo`**: persists via the p2 overlay (survives reboot but NOT `.swu` reflash).
 - **Autostart via systemd**: `cr1140-avalonia.service` runs the app on boot (masks CODESYS + app-launcher + cr1140-app to own `/dev/fb0` exclusively).
+- **Watchdog / liveness supervision**: the unit is `Type=notify` with `WatchdogSec=30s`; the app runs `Cr1140.Avalonia.Systemd.SystemdWatchdog` from `App.OnFrameworkInitializationCompleted` — it sends `READY=1` and a UI-thread `WATCHDOG=1` heartbeat, so a wedged UI thread is restarted in place (`StartLimitBurst=5/60s`, **not** CODESYS's `reboot-force`). `install.sh` also arms the imx2-wdt **hardware** watchdog (`RuntimeWatchdogSec=60` drop-in) as a backstop if systemd itself hangs; `restore.sh` removes it.
 
 ### ⚠ Caveat: CODESYS watchdog + reboot-force
 

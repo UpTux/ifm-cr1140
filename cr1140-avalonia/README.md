@@ -533,6 +533,50 @@ On-device (CR1140, 2×Cortex-A53, DRM): steady-idle ~5 % of one core regardless 
 continuous redraw ~69 % @60, ~48 % @24, ~31 % @15. `fps <= 0` leaves the Avalonia default
 (60). The `cr1140-avalonia-demo` wires it via `--fps=<n>` / `CR1140_FPS`.
 
+## systemd watchdog
+
+`SystemdWatchdog` (namespace `Cr1140.Avalonia.Systemd`) reproduces the liveness
+supervision the stock CODESYS runtime uses — a systemd **`Type=notify` + `WatchdogSec=`**
+service watchdog — for your Avalonia app, with **no `libsystemd` dependency**. It reads
+`NOTIFY_SOCKET` / `WATCHDOG_USEC` from the environment, speaks the `sd_notify(3)` AF_UNIX
+datagram protocol directly, and **no-ops off systemd** (desktop/dev), so it is safe to
+construct and `Start()` unconditionally.
+
+`Start()` sends `READY=1`, then pings `WATCHDOG=1` on a `DispatcherTimer` at **half** of
+`WATCHDOG_USEC`. The ping runs on the **Avalonia UI thread** — so if the UI/render thread
+wedges the pings stop and systemd restarts the app. (A background-thread ping would keep
+firing through a frozen UI and hide the hang.) Call it once the surface is up:
+
+```csharp
+using Cr1140.Avalonia.Systemd;
+
+public override void OnFrameworkInitializationCompleted()
+{
+    // ... set up your MainView / MainWindow ...
+
+    _watchdog = new SystemdWatchdog(); // no-op off systemd
+    _watchdog.Start();                 // READY=1 + UI-thread WATCHDOG=1 heartbeat
+    base.OnFrameworkInitializationCompleted();
+}
+```
+
+Configure the unit to match (restart in place rather than CODESYS's `reboot-force`):
+
+```ini
+[Unit]
+StartLimitIntervalSec=60
+StartLimitBurst=5
+
+[Service]
+Type=notify
+WatchdogSec=30s
+Restart=on-failure
+```
+
+For defense-in-depth, let systemd arm the SoC **hardware** watchdog as a backstop if
+systemd itself hangs — a drop-in `/etc/systemd/system.conf.d/` file with
+`[Manager]\nRuntimeWatchdogSec=60`, then `systemctl daemon-reexec`.
+
 ## Design Note
 
 `EvdevKeypadInput` raises a **managed `KeyPressed` event** on a background reader thread. Your application code subscribes to this event and drives navigation, view-model state, or an FSM — the **app-driven pattern**. 

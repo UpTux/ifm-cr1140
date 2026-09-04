@@ -32,5 +32,10 @@ systemctl enable --now app-launcher.service || true
 echo "Unmasking cr1140-app.service ..."
 systemctl unmask cr1140-app.service 2>/dev/null || true
 
+# Remove the hardware-watchdog drop-in installed by install.sh and re-exec so
+# PID1 releases /dev/watchdog0 (nowayout is off, so this disarms it cleanly).
+rm -f /etc/systemd/system.conf.d/60-cr1140-watchdog.conf
+systemctl daemon-reexec
+
 systemctl daemon-reload
 echo "CODESYS restored to stock (unmasked, disabled); app-launcher restored; cr1140-avalonia removed."
