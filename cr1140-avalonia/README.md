@@ -496,7 +496,8 @@ BuildAvaloniaApp().StartLinuxDrmRotated(
     DisplayRotation.None,          // None / Clockwise90 / Clockwise180 / Clockwise270
     "/dev/dri/card0",              // or null for the default node
     scaling: 1.0,
-    inputBackend: keypad);
+    inputBackend: keypad,
+    fps: 24);                      // cap the render/present rate (default 60)
 ```
 
 Or drive a `RotatingDrmOutput` yourself and pass it to `StartLinuxDirect`:
@@ -518,6 +519,19 @@ BuildAvaloniaApp().StartLinuxDirect(args, output, keypad);
 The `cr1140-avalonia-demo` uses this DRM path **by default**; opt out with `--fbdev` (or
 `CR1140_OUTPUT=fbdev`), and override the node with `--card=…` / `CR1140_CARD`. If DRM init
 fails it logs and falls back to the fbdev backend.
+
+### Fixed-FPS render cap (CPU headroom)
+
+Both `StartLinuxDrmRotated` and `StartLinuxFbDevRotated` accept an optional `fps` argument
+(default 60) that sets Avalonia's `LinuxFramebufferPlatformOptions.Fps` — the render-timer
+ceiling on how often the compositor renders and presents. Rendering is **software Skia** (no
+GPU) and every present does a **full-frame rotate-blit + page-flip** regardless of dirty
+region, so present CPU is proportional to the present rate. Lowering `fps` frees CPU **while
+the UI is actively redrawing** (animations, live gauges, scrolling); at idle it is a no-op,
+because Avalonia is retained-mode and an unchanging screen produces no frames to throttle.
+On-device (CR1140, 2×Cortex-A53, DRM): steady-idle ~5 % of one core regardless of `fps`;
+continuous redraw ~69 % @60, ~48 % @24, ~31 % @15. `fps <= 0` leaves the Avalonia default
+(60). The `cr1140-avalonia-demo` wires it via `--fps=<n>` / `CR1140_FPS`.
 
 ## Design Note
 

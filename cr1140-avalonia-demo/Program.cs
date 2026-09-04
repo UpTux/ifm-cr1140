@@ -3,6 +3,7 @@ using Cr1140.Avalonia.Diagnostics;
 using Cr1140.Avalonia.Input;
 using Cr1140.Avalonia.Output;
 using Avalonia.LinuxFramebuffer.Output;
+using Avalonia.LinuxFramebuffer;
 
 namespace Cr1140.AvaloniaDemo;
 
@@ -57,7 +58,14 @@ internal static class Program
             }
         }
 
-        return BuildAvaloniaApp().StartLinuxDirect(args, output, Keypad);
+        // Cap the render/present rate (software Skia => every frame is CPU work). Default 60
+        // (Avalonia platform default); lower it via `--fps=24` or CR1140_FPS to free CPU.
+        var fps = ParseFps(args, Environment.GetEnvironmentVariable("CR1140_FPS"));
+        var app = BuildAvaloniaApp();
+        if (fps > 0)
+            app = app.With(new LinuxFramebufferPlatformOptions { Fps = fps });
+
+        return app.StartLinuxDirect(args, output, Keypad);
     }
 
     private static string? ParseOption(string[] args, string flag)
@@ -87,6 +95,12 @@ internal static class Program
             "270" => DisplayRotation.Clockwise270,
             _ => DisplayRotation.None,
         };
+    }
+
+    private static int ParseFps(string[] args, string? env)
+    {
+        var value = ParseOption(args, "--fps=") ?? env;
+        return int.TryParse(value, out var fps) && fps > 0 ? fps : 60;
     }
 
     public static AppBuilder BuildAvaloniaApp()

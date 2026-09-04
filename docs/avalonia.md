@@ -115,6 +115,40 @@ If DRM init fails (no device / not master) it logs to stderr and falls back to f
 path needs exclusive display ownership (DRM master) — the install script already masks
 `app-launcher`/`ifm-local-setup`/CODESYS.
 
+### Fixed-FPS render cap (CPU headroom)
+
+`Cr1140.Avalonia` v0.10.0 adds a render-rate cap. `StartLinuxDrmRotated` /
+`StartLinuxFbDevRotated` take an optional `fps` argument (default 60) that sets Avalonia's
+`LinuxFramebufferPlatformOptions.Fps` — the render-timer interval (`1/fps`) that paces the
+compositor's render + present. Because the i.MX 8M Nano renders with **software Skia** (no
+GPU) and every present does a **full-frame rotate-blit + page-flip** regardless of dirty
+region, present CPU is proportional to the present rate.
+
+The demo exposes it via `--fps=<n>` or the `CR1140_FPS` env var (the deployed
+`cr1140-avalonia.service` sets `Environment=CR1140_FPS=24`):
+
+```sh
+CR1140_FPS=24 /home/cds-apps/cr1140-avalonia-demo/Cr1140.AvaloniaDemo /dev/input/event1
+# or: Cr1140.AvaloniaDemo /dev/input/event1 --fps=24
+```
+
+Measured on-device (CR1140, 2×Cortex-A53, DRM path; 25 s settle, 20 s window):
+
+| scenario | fps=60 | fps=24 | fps=15 |
+|----------|-------:|-------:|-------:|
+| steady idle (retained-mode) | ~5 % | ~5 % | — |
+| continuous redraw | ~69 % | ~48 % | ~31 % |
+
+(CPU is % of **one** core.) Takeaways: at **idle** the cap is a no-op — Avalonia is
+retained-mode, so an unchanging screen produces no frames to throttle (~5 % runtime floor
+either way). While the panel is **actively re-rendering** (animations, live gauges,
+scrolling, or the intermittent DRM free-run flip state) CPU scales with `fps`: capping
+60→24 reclaims ~20 percentage-points of a core (~10 % of the 2-core SoC), 60→15 ~54 %. So
+a fixed low fps buys headroom for other work **during render load**, at the cost of less
+smooth animation. **24** is the deployed default (smooth enough for an operator panel,
+meaningful headroom under load, zero idle penalty); drop to 15 for more headroom, or pass
+`fps <= 0` to keep Avalonia's 60.
+
 ### Usage
 
 Install from NuGet (once published):

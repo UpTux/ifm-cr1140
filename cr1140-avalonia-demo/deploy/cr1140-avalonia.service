@@ -5,6 +5,7 @@ After=multi-user.target
 [Service]
 Type=simple
 Environment=DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=1
+Environment=CR1140_FPS=24
 ExecStart=/home/cds-apps/cr1140-avalonia-demo/Cr1140.AvaloniaDemo /dev/input/event1
 Restart=on-failure
 RestartSec=2

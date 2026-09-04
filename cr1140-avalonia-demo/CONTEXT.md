@@ -42,6 +42,8 @@ beyond the minimum for input and font.
 
 **Performance overlay**: The demo attaches the diagnostics HUD (from `Cr1140.Avalonia.Diagnostics`) on the main view's `OverlayLayer`, hidden by default, toggled by **F5 double-tap**. A `--perf` CLI arg or `CR1140_PERF=1` environment variable makes it start visible (for verification). The HUD shows real FPS and frame timing (Render/Present split, V-Sync state) sourced from the output backends.
 
+**Render-rate cap**: The demo caps the compositor's render/present rate via `--fps=<n>` or the `CR1140_FPS` env var (default 60; the deployed `cr1140-avalonia.service` sets `Environment=CR1140_FPS=24`), applied as `AppBuilder.With(new LinuxFramebufferPlatformOptions { Fps })` before `StartLinuxDirect`. Software Skia renders every full-frame present on the CPU, so a lower fps trades animation smoothness for CPU headroom **while the panel is actively redrawing** — no effect at idle, since Avalonia is retained-mode. On-device (DRM, 2×A53): steady-idle ~5 % of one core regardless of fps; continuous redraw ~69 % @60 vs ~48 % @24 vs ~31 % @15. See `cr1140-avalonia/CONTEXT.md` §Conventions ("Fixed-FPS render cap").
+
 ## Glossary
 
 | Term | Meaning |
