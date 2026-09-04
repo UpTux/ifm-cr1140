@@ -1,4 +1,6 @@
+using System.Buffers.Binary;
 using System.Runtime.InteropServices;
+using Cr1140.Avalonia.Diagnostics;
 using Avalonia;
 using Avalonia.Controls.Platform.Surfaces;
 using Avalonia.LinuxFramebuffer.Output;
@@ -51,10 +53,20 @@ public sealed class RotatingDrmOutput : IOutputBackend, IFramebufferPlatformSurf
     private const uint DrmModeConnected = 1;          // DRM_MODE_CONNECTED
     private const uint DrmModeTypePreferred = 1 << 3; // DRM_MODE_TYPE_PREFERRED
     private const uint DrmModePageFlipEvent = 0x01;   // DRM_MODE_PAGE_FLIP_EVENT
+    private const uint DrmEventFlipComplete = 0x02;   // DRM_EVENT_FLIP_COMPLETE
+    private const int PollIn = 0x001;                 // POLLIN
+    private const int EIntr = 4;                      // EINTR
+
+    // Bounded ceiling (ms) for observing a page-flip completion event. The normal path
+    // returns in ~one refresh — poll() wakes the instant the flip event is ready — so this
+    // only bites when the driver drops a vblank/flip event: the render loop then proceeds
+    // instead of blocking on read() forever (which froze the panel until the next keypress).
+    private const int FlipCompleteTimeoutMs = 250;
 
     private static uint Iowr(uint nr, uint size) => (3u << 30) | ((size & 0x3FFF) << 16) | (DrmIoctlBase << 8) | nr;
 
     private readonly DisplayRotation _rotation;
+    private readonly FrameStatsRecorder? _stats;
     private readonly object _lock = new();
 
     private int _fd;
@@ -91,9 +103,11 @@ public sealed class RotatingDrmOutput : IOutputBackend, IFramebufferPlatformSurf
     /// <param name="card">DRM primary node, or null for <c>/dev/dri/card0</c>.</param>
     /// <param name="rotation">Clockwise rotation to apply to every frame.</param>
     /// <param name="scaling">Initial layout scale factor.</param>
-    public RotatingDrmOutput(string? card = null, DisplayRotation rotation = DisplayRotation.None, double scaling = 1.0)
+    /// <param name="stats">Optional recorder fed one <c>FrameSample</c> per presented frame; <c>null</c> disables instrumentation.</param>
+    public RotatingDrmOutput(string? card = null, DisplayRotation rotation = DisplayRotation.None, double scaling = 1.0, FrameStatsRecorder? stats = null)
     {
         _rotation = rotation;
+        _stats = stats;
         Scaling = scaling;
 
         var path = card ?? "/dev/dri/card0";
@@ -145,6 +159,7 @@ public sealed class RotatingDrmOutput : IOutputBackend, IFramebufferPlatformSurf
         var backBufferLength = _logicalStrideBytes * _logicalHeight;
         _backBuffer = Marshal.AllocHGlobal(backBufferLength);
         new Span<byte>((void*)_backBuffer, backBufferLength).Clear();
+        _stats?.SetPresentInfo("DRM (tear-free)", _rotation, new PixelSize(_logicalWidth, _logicalHeight));
     }
 
     /// <inheritdoc />
@@ -159,6 +174,7 @@ public sealed class RotatingDrmOutput : IOutputBackend, IFramebufferPlatformSurf
         try
         {
             var dpi = new Vector(96, 96) * Scaling;
+            _stats?.BeginRender();
             return new LockedFramebuffer(
                 _backBuffer,
                 new PixelSize(_logicalWidth, _logicalHeight),
@@ -167,9 +183,11 @@ public sealed class RotatingDrmOutput : IOutputBackend, IFramebufferPlatformSurf
                 _format,
                 () =>
                 {
+                    _stats?.BeginPresent();
                     try
                     {
-                        Present();
+                        var vsync = Present();
+                        _stats?.EndFrame(vsync);
                     }
                     finally
                     {
@@ -184,7 +202,7 @@ public sealed class RotatingDrmOutput : IOutputBackend, IFramebufferPlatformSurf
         }
     }
 
-    private unsafe void Present()
+    private unsafe bool Present()
     {
         int back = _frontIndex ^ 1;
         var target = _dumb[back];
@@ -200,15 +218,15 @@ public sealed class RotatingDrmOutput : IOutputBackend, IFramebufferPlatformSurf
         if (_supportsFlip && PageFlip(target.FbId))
         {
             _frontIndex = back;
-            return;
+            return true;
         }
 
         // Driver rejected the page-flip: fall back to a (tearing, but working) modeset present.
         _supportsFlip = false;
         SetCrtc(target.FbId);
         _frontIndex = back;
+        return false;
     }
-
     // --- KMS setup ---------------------------------------------------------------------
 
     private unsafe (uint[] crtcs, uint[] connectors) GetResources()
@@ -385,20 +403,103 @@ public sealed class RotatingDrmOutput : IOutputBackend, IFramebufferPlatformSurf
 
     private unsafe bool PageFlip(uint fbId)
     {
+        if (!QueueFlip(fbId))
+        {
+            // Most likely EBUSY: a previous flip's completion event was never observed
+            // (the driver dropped a vblank), so a flip is still queued. Drain whatever is
+            // pending and retry once — a single missed event must not permanently drop us
+            // to tearing modeset presents, nor block read() forever.
+            DrainPendingEvents();
+            if (!QueueFlip(fbId))
+                return false;
+        }
+
+        // Wait for THIS flip to report completion, but never block the render loop
+        // indefinitely: poll() with a bounded ceiling so a dropped flip-complete event
+        // can't deadlock the present thread (which previously froze the panel until the
+        // next keypress woke a fresh flip). The normal path still returns at vblank, so
+        // the loop stays vsync-throttled to the panel refresh.
+        WaitForFlipComplete();
+        return true;
+    }
+
+    private unsafe bool QueueFlip(uint fbId)
+    {
         var flip = new DrmModeCrtcPageFlip
         {
             CrtcId = _crtcId,
             FbId = fbId,
             Flags = DrmModePageFlipEvent,
         };
-        if (ioctl(_fd, _reqPageFlip, &flip) == -1)
-            return false;
+        return ioctl(_fd, _reqPageFlip, &flip) != -1;
+    }
 
-        // Drain the flip-complete event. A blocking read returns at vblank, which both
-        // frees the driver for the next flip and throttles the render loop to the panel.
+    // Block until the pending page-flip reports completion or the bounded ceiling elapses.
+    // Returns true if a DRM_EVENT_FLIP_COMPLETE was drained, false on timeout/error — the
+    // caller proceeds regardless; an unconfirmed flip re-syncs on the next frame.
+    private unsafe bool WaitForFlipComplete()
+    {
+        long deadline = Environment.TickCount64 + FlipCompleteTimeoutMs;
         byte* buf = stackalloc byte[256];
-        read(_fd, buf, (UIntPtr)256);
-        return true;
+
+        while (true)
+        {
+            int remaining = (int)(deadline - Environment.TickCount64);
+            if (remaining <= 0)
+                return false;
+
+            var pfd = new PollFd { Fd = _fd, Events = (short)PollIn, Revents = 0 };
+            int pr = poll(&pfd, 1, remaining);
+            if (pr < 0)
+            {
+                if (Marshal.GetLastWin32Error() == EIntr)
+                    continue;
+                return false;
+            }
+            if (pr == 0)
+                return false; // timed out waiting for the flip event
+
+            long n = read(_fd, buf, (UIntPtr)256);
+            if (n <= 0)
+                return false;
+
+            if (ContainsFlipComplete(new ReadOnlySpan<byte>(buf, (int)n)))
+                return true;
+            // A non-flip event (e.g. a bare vblank): keep waiting within the budget.
+        }
+    }
+
+    // Best-effort, non-blocking drain of any queued DRM events — clears a stale
+    // flip-complete before re-queuing after an EBUSY. Bounded so it can never spin.
+    private unsafe void DrainPendingEvents()
+    {
+        byte* buf = stackalloc byte[256];
+        for (int i = 0; i < 8; i++)
+        {
+            var pfd = new PollFd { Fd = _fd, Events = (short)PollIn, Revents = 0 };
+            if (poll(&pfd, 1, 0) <= 0)
+                return;
+            if (read(_fd, buf, (UIntPtr)256) <= 0)
+                return;
+        }
+    }
+
+    // Parse a DRM event stream — a packed sequence of { u32 type, u32 length } records —
+    // and report whether any record is a page-flip completion. Pure and host-testable.
+    internal static bool ContainsFlipComplete(ReadOnlySpan<byte> events)
+    {
+        int off = 0;
+        while (off + 8 <= events.Length)
+        {
+            uint type = BinaryPrimitives.ReadUInt32LittleEndian(events.Slice(off, 4));
+            uint length = BinaryPrimitives.ReadUInt32LittleEndian(events.Slice(off + 4, 4));
+            if (length < 8 || off + (int)length > events.Length)
+                break; // malformed or truncated tail
+            if (type == DrmEventFlipComplete)
+                return true;
+            off += (int)length;
+        }
+        return false;
     }
 
     private unsafe void IoctlOrThrow(uint request, void* arg, string what)
@@ -482,6 +583,17 @@ public sealed class RotatingDrmOutput : IOutputBackend, IFramebufferPlatformSurf
 
     [DllImport("libc", SetLastError = true)]
     private static extern unsafe long read(int fd, void* buf, UIntPtr count);
+
+    [DllImport("libc", SetLastError = true)]
+    private static extern unsafe int poll(PollFd* fds, uint nfds, int timeout);
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct PollFd
+    {
+        public int Fd;
+        public short Events;
+        public short Revents;
+    }
 
     [StructLayout(LayoutKind.Sequential)]
     private struct DrmModeCardRes

@@ -39,6 +39,8 @@ beyond the minimum for input and font.
 | `App.axaml` | FluentTheme Dark, Inter font (`.WithInterFont()`), and the `<Application.DataTemplates>` map (each screen VM → its View). |
 | `Program.cs` | Avalonia startup: picks the output backend, constructs it, and calls `AppBuilder.Configure<App>().StartLinuxDirect(...)` with our `EvdevKeypadInput` and scaling=1. **DRM/KMS (`RotatingDrmOutput`) is the default** — tear-free double-buffer + page-flip on `/dev/dri/card0` (overridable with `--card=` / `CR1140_CARD`); force the single-buffered fbdev backend with `--fbdev` or `CR1140_OUTPUT=fbdev`. If DRM init fails (no device / not DRM master) it logs to stderr and falls back to fbdev so the panel still comes up. Rotation comes from `--rotate=90\|180\|270` or the `CR1140_ROTATE` env var (default: none), so the panel can be mounted in any orientation. Does NOT call `.UsePlatformDetect()` (we choose the platform). |
 
+**Performance overlay**: The demo attaches the diagnostics HUD (from `Cr1140.Avalonia.Diagnostics`) on the main view's `OverlayLayer`, hidden by default, toggled by **F5 double-tap**. A `--perf` CLI arg or `CR1140_PERF=1` environment variable makes it start visible (for verification). The HUD shows real FPS and frame timing (Render/Present split, V-Sync state) sourced from the output backends.
+
 ## Glossary
 
 | Term | Meaning |
