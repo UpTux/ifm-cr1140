@@ -1,13 +1,22 @@
 [Unit]
 Description=CR1140 Avalonia operator-panel demo
 After=multi-user.target
+# Supervise liveness like codesys.service, but restart in place instead of
+# reboot-force: 5 failed (re)starts per 60 s before systemd gives up.
+StartLimitIntervalSec=60
+StartLimitBurst=5
 
 [Service]
-Type=simple
+Type=notify
 Environment=DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=1
+Environment=CR1140_FPS=24
 ExecStart=/home/cds-apps/cr1140-avalonia-demo/Cr1140.AvaloniaDemo /dev/input/event1
 Restart=on-failure
 RestartSec=2
+# Software watchdog (mirrors codesys.service): the app sends sd_notify WATCHDOG=1
+# from the Avalonia UI thread; if that thread wedges past this window systemd
+# SIGABRTs + restarts it. Type=notify also requires the app to send READY=1.
+WatchdogSec=30s
 
 [Install]
 WantedBy=multi-user.target

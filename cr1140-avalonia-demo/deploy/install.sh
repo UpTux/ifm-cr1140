@@ -36,9 +36,21 @@ echo "Stopping + masking cr1140-app.service (the Rust demo) ..."
 systemctl disable --now cr1140-app.service 2>/dev/null || true
 systemctl mask cr1140-app.service 2>/dev/null || true
 
+# --- Hardware watchdog backstop (imx2-wdt @ /dev/watchdog0) ---------------
+# The SoC watchdog is unclaimed by default (system.conf RuntimeWatchdogSec=off).
+# Have PID1 arm + pet it so the board hard-resets if systemd ITSELF hangs (the
+# per-service WatchdogSec only covers the app process). nowayout is off in this
+# kernel, so a clean shutdown disarms it. restore.sh removes this drop-in.
+mkdir -p /etc/systemd/system.conf.d
+cat > /etc/systemd/system.conf.d/60-cr1140-watchdog.conf <<'WDEOF'
+[Manager]
+RuntimeWatchdogSec=60
+WDEOF
+systemctl daemon-reexec
+
 mkdir -p "$APPDIR"
 cp /tmp/cr1140-avalonia.service /etc/systemd/system/cr1140-avalonia.service
 chmod 0644 /etc/systemd/system/cr1140-avalonia.service
 systemctl daemon-reload
 systemctl enable --now cr1140-avalonia.service
-echo "CODESYS masked; cr1140-avalonia enabled."
+echo "CODESYS masked; HW watchdog armed (RuntimeWatchdogSec=60); cr1140-avalonia enabled."

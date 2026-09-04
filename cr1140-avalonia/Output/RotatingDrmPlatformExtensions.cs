@@ -1,4 +1,5 @@
 using Avalonia;
+using Avalonia.LinuxFramebuffer;
 using Cr1140.Avalonia.Diagnostics;
 using Avalonia.LinuxFramebuffer.Input;
 
@@ -23,6 +24,14 @@ public static class RotatingDrmPlatformExtensions
     /// <param name="scaling">Layout scale factor.</param>
     /// <param name="stats">Optional performance recorder.</param>
     /// <param name="inputBackend">Optional input backend (e.g. <c>EvdevKeypadInput</c>).</param>
+    /// <param name="fps">
+    /// Maximum frames per second the renderer is allowed to run at (the Avalonia
+    /// <see cref="LinuxFramebufferPlatformOptions.Fps"/> render-timer cap). The i.MX 8M Nano
+    /// renders with <b>software Skia</b> (no GPU), so every produced frame is CPU work
+    /// (Skia rasterize + rotate-blit + page-flip wait); lowering this from the default 60 to,
+    /// say, 24 caps how often that work runs and frees CPU for the rest of the app. Values
+    /// &lt;= 0 leave the Avalonia platform default (60) untouched.
+    /// </param>
     /// <returns>The application exit code.</returns>
     public static int StartLinuxDrmRotated(
         this AppBuilder builder,
@@ -31,6 +40,11 @@ public static class RotatingDrmPlatformExtensions
         string? card = null,
         double scaling = 1.0,
         FrameStatsRecorder? stats = null,
-        IInputBackend? inputBackend = null)
-        => builder.StartLinuxDirect(args, new RotatingDrmOutput(card, rotation, scaling, stats), inputBackend);
+        IInputBackend? inputBackend = null,
+        int fps = 60)
+    {
+        if (fps > 0)
+            builder.With(new LinuxFramebufferPlatformOptions { Fps = fps });
+        return builder.StartLinuxDirect(args, new RotatingDrmOutput(card, rotation, scaling, stats), inputBackend);
+    }
 }

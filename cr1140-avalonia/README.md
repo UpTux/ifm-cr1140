@@ -496,7 +496,8 @@ BuildAvaloniaApp().StartLinuxDrmRotated(
     DisplayRotation.None,          // None / Clockwise90 / Clockwise180 / Clockwise270
     "/dev/dri/card0",              // or null for the default node
     scaling: 1.0,
-    inputBackend: keypad);
+    inputBackend: keypad,
+    fps: 24);                      // cap the render/present rate (default 60)
 ```
 
 Or drive a `RotatingDrmOutput` yourself and pass it to `StartLinuxDirect`:
@@ -518,6 +519,63 @@ BuildAvaloniaApp().StartLinuxDirect(args, output, keypad);
 The `cr1140-avalonia-demo` uses this DRM path **by default**; opt out with `--fbdev` (or
 `CR1140_OUTPUT=fbdev`), and override the node with `--card=…` / `CR1140_CARD`. If DRM init
 fails it logs and falls back to the fbdev backend.
+
+### Fixed-FPS render cap (CPU headroom)
+
+Both `StartLinuxDrmRotated` and `StartLinuxFbDevRotated` accept an optional `fps` argument
+(default 60) that sets Avalonia's `LinuxFramebufferPlatformOptions.Fps` — the render-timer
+ceiling on how often the compositor renders and presents. Rendering is **software Skia** (no
+GPU) and every present does a **full-frame rotate-blit + page-flip** regardless of dirty
+region, so present CPU is proportional to the present rate. Lowering `fps` frees CPU **while
+the UI is actively redrawing** (animations, live gauges, scrolling); at idle it is a no-op,
+because Avalonia is retained-mode and an unchanging screen produces no frames to throttle.
+On-device (CR1140, 2×Cortex-A53, DRM): steady-idle ~5 % of one core regardless of `fps`;
+continuous redraw ~69 % @60, ~48 % @24, ~31 % @15. `fps <= 0` leaves the Avalonia default
+(60). The `cr1140-avalonia-demo` wires it via `--fps=<n>` / `CR1140_FPS`.
+
+## systemd watchdog
+
+`SystemdWatchdog` (namespace `Cr1140.Avalonia.Systemd`) reproduces the liveness
+supervision the stock CODESYS runtime uses — a systemd **`Type=notify` + `WatchdogSec=`**
+service watchdog — for your Avalonia app, with **no `libsystemd` dependency**. It reads
+`NOTIFY_SOCKET` / `WATCHDOG_USEC` from the environment, speaks the `sd_notify(3)` AF_UNIX
+datagram protocol directly, and **no-ops off systemd** (desktop/dev), so it is safe to
+construct and `Start()` unconditionally.
+
+`Start()` sends `READY=1`, then pings `WATCHDOG=1` on a `DispatcherTimer` at **half** of
+`WATCHDOG_USEC`. The ping runs on the **Avalonia UI thread** — so if the UI/render thread
+wedges the pings stop and systemd restarts the app. (A background-thread ping would keep
+firing through a frozen UI and hide the hang.) Call it once the surface is up:
+
+```csharp
+using Cr1140.Avalonia.Systemd;
+
+public override void OnFrameworkInitializationCompleted()
+{
+    // ... set up your MainView / MainWindow ...
+
+    _watchdog = new SystemdWatchdog(); // no-op off systemd
+    _watchdog.Start();                 // READY=1 + UI-thread WATCHDOG=1 heartbeat
+    base.OnFrameworkInitializationCompleted();
+}
+```
+
+Configure the unit to match (restart in place rather than CODESYS's `reboot-force`):
+
+```ini
+[Unit]
+StartLimitIntervalSec=60
+StartLimitBurst=5
+
+[Service]
+Type=notify
+WatchdogSec=30s
+Restart=on-failure
+```
+
+For defense-in-depth, let systemd arm the SoC **hardware** watchdog as a backstop if
+systemd itself hangs — a drop-in `/etc/systemd/system.conf.d/` file with
+`[Manager]\nRuntimeWatchdogSec=60`, then `systemctl daemon-reexec`.
 
 ## Design Note
 
