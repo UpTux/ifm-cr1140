@@ -1,0 +1,70 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:vm="using:Cr1140.AvaloniaDemo.ViewModels"
+             mc:Ignorable="d" d:DesignWidth="800" d:DesignHeight="480"
+             x:Class="Cr1140.AvaloniaDemo.Views.BrightnessView"
+             x:CompileBindings="True"
+             x:DataType="vm:BrightnessViewModel">
+
+  <Grid RowDefinitions="Auto,*,Auto" Margin="24,14">
+
+    <!-- Instruction -->
+    <TextBlock Grid.Row="0"
+               Text="Up / F2 Brighter  ·  Down / F1 Dimmer  ·  F6 Back"
+               FontSize="15"
+               Foreground="#888888"
+               HorizontalAlignment="Center"
+               Margin="0,0,0,12"/>
+
+    <!-- Brightness card -->
+    <Border Grid.Row="1"
+            Background="#141414"
+            BorderBrush="#333333"
+            BorderThickness="1"
+            CornerRadius="8"
+            Margin="4"
+            Padding="28,22"
+            HorizontalAlignment="Stretch"
+            VerticalAlignment="Center">
+      <StackPanel Spacing="10">
+        <TextBlock Text="DISPLAY BRIGHTNESS"
+                   FontSize="13"
+                   FontWeight="SemiBold"
+                   Foreground="#666666"
+                   HorizontalAlignment="Center"/>
+
+        <TextBlock Text="{Binding Percent, StringFormat='{}{0}%'}"
+                   FontSize="72"
+                   FontWeight="Bold"
+                   Foreground="#f2f2f2"
+                   HorizontalAlignment="Center"/>
+
+        <ProgressBar Minimum="0"
+                     Maximum="100"
+                     Value="{Binding Percent}"
+                     Height="26"
+                     CornerRadius="6"
+                     Foreground="#ffd60a"
+                     Background="#2a2a2a"/>
+
+        <TextBlock Text="{Binding RawText}"
+                   FontSize="14"
+                   Foreground="#999999"
+                   HorizontalAlignment="Center"
+                   Margin="0,4,0,0"/>
+      </StackPanel>
+    </Border>
+
+    <!-- Hardware access hint -->
+    <TextBlock Grid.Row="2"
+               Text="{Binding HardwareState}"
+               FontSize="12"
+               Foreground="#666666"
+               HorizontalAlignment="Center"
+               Margin="0,10,0,0"/>
+
+  </Grid>
+
+</UserControl>

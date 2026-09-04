@@ -36,5 +36,8 @@
     <DataTemplate DataType="vm:LedsViewModel">
       <views:LedsView />
     </DataTemplate>
+    <DataTemplate DataType="vm:BrightnessViewModel">
+      <views:BrightnessView />
+    </DataTemplate>
   </Application.DataTemplates>
 </Application>
