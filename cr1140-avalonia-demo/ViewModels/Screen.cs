@@ -14,5 +14,6 @@ public enum Screen
     Telemetry,
     Settings,
     KeyEvents,
-    Leds
+    Leds,
+    Brightness
 }

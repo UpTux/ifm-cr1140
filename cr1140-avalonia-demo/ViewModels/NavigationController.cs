@@ -19,6 +19,7 @@ public sealed class NavigationController
     private readonly SettingsViewModel _settings;
     private readonly KeyEventsViewModel _keyEvents;
     private readonly LedsViewModel _leds;
+    private readonly BrightnessViewModel _brightness;
 
     private Screen _current;
 
@@ -34,6 +35,7 @@ public sealed class NavigationController
         _settings = new SettingsViewModel();
         _keyEvents = new KeyEventsViewModel();
         _leds = new LedsViewModel();
+        _brightness = new BrightnessViewModel();
 
         _current = Screen.Menu;
     }
@@ -130,6 +132,10 @@ public sealed class NavigationController
                 else if (key == KeypadKey.F2) _leds.CycleBacklight();
                 else if (key == KeypadKey.F3) _leds.CycleMode();
                 break;
+            case Screen.Brightness:
+                if (key == KeypadKey.Up || key == KeypadKey.F2) _brightness.Increase();
+                else if (key == KeypadKey.Down || key == KeypadKey.F1) _brightness.Decrease();
+                break;
         }
     }
 
@@ -147,6 +153,10 @@ public sealed class NavigationController
             _leds.Deactivate();
         if (screen == Screen.Leds)
             _leds.Activate();
+
+        // Re-read the live backlight each time the Brightness screen opens.
+        if (screen == Screen.Brightness)
+            _brightness.Activate();
 
         // Update MainViewModel state
         _main.UpdateScreen(
@@ -168,6 +178,7 @@ public sealed class NavigationController
             5 => Screen.Settings,
             6 => Screen.KeyEvents,
             7 => Screen.Leds,
+            8 => Screen.Brightness,
             _ => Screen.Menu
         };
     }
@@ -184,6 +195,7 @@ public sealed class NavigationController
             Screen.Telemetry => "Telemetry",
             Screen.KeyEvents => "Key Events",
             Screen.Leds => "LEDs",
+            Screen.Brightness => "Display Brightness",
             Screen.Settings => "Settings",
             _ => "Baler"
         };
@@ -202,6 +214,7 @@ public sealed class NavigationController
             Screen.Settings => _settings,
             Screen.KeyEvents => _keyEvents,
             Screen.Leds => _leds,
+            Screen.Brightness => _brightness,
             _ => _menu
         };
     }
@@ -233,6 +246,7 @@ public sealed class NavigationController
             Screen.Settings => new[] { "Toggle Bus", "Footer", "", "", "", "Back" },
             Screen.KeyEvents => new[] { "", "", "", "", "", "Back" },
             Screen.Leds => new[] { "Status", "Kbd Color", "Mode", "", "", "Back" },
+            Screen.Brightness => new[] { "Dimmer", "Brighter", "", "", "", "Back" },
             _ => new[] { "", "", "", "", "", "" }
         };
     }

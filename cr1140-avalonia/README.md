@@ -313,6 +313,41 @@ are the sysfs wirings. This mirrors the Rust `cr1140-hal` `sys` LED functions an
 `cr1140-sdk` `led` module. The status light is set per-channel (`SetTyped`); the keypad
 backlight is one RGB color (`SetKbdBacklight` / `LedDriver`).
 
+## Display brightness
+
+The panel's LCD backlight is exposed by the kernel under `/sys/class/backlight/backlight/`
+(`max_brightness` = 400 on the CR1140/CR1141). The `Cr1140.Avalonia.Display` namespace's
+`Backlight` mirrors the Rust `cr1140-hal` `sys` backlight functions — a thin sysfs
+primitive — and adds 0–100 % helpers so you can offer an operator brightness control
+without hard-coding the panel's raw range. Writes need write access to the `brightness`
+node (run as root or add a udev rule); off-device every call is a safe no-op — writes
+return `false`, reads return `null`.
+
+```csharp
+using Cr1140.Avalonia.Display;
+
+// Raw counts (0..max_brightness):
+uint? max = Backlight.Max(Backlight.Default);       // 400 on the CR1140
+uint? cur = Backlight.Read(Backlight.Default);
+Backlight.Set(Backlight.Default, 300);
+
+// Or as a percentage, scaled against max_brightness for you:
+Backlight.SetPercent(Backlight.Default, 80);        // 80 % → 320 counts
+double? pct = Backlight.ReadPercent(Backlight.Default);
+```
+
+> ⚠ Writing `0` turns the backlight fully off. On a keypad-only panel there is no touch
+> to recover, so keep a non-zero floor in your UI (the demo uses 10 %).
+
+### Namespace: `Cr1140.Avalonia.Display`
+
+| Type | Role |
+|------|------|
+| `Backlight` | Typed `/sys/class/backlight/` read/write: `Default` (=`"backlight"`) and `MaxHint` (=400) constants, `Set`/`Read` (raw counts), `Max` (reads `max_brightness`), `ListBacklights()`, plus `SetPercent(name, 0..100)` / `ReadPercent(name)` scaled against `max_brightness`. Writes → `bool`, reads → `uint?`/`double?`; safe no-op off-device. |
+
+`Backlight` is **pure BCL** sysfs access (no Avalonia dependency), the screen-brightness
+counterpart of `LedSysfs`, mirroring the Rust `cr1140-hal` `sys` backlight primitives.
+
 
 ## Performance overlay
 
