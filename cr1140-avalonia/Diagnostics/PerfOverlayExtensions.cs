@@ -46,7 +46,7 @@ public static class PerfOverlayExtensions
         layer.Children.Add(overlay);
 
         // Wire up keypad toggle if configured
-        if (options?.ToggleKeypad is EvdevKeypadInput keypad)
+        if (options?.ToggleKeypad is IKeypadInput keypad)
         {
             var toggleKey = options.ToggleKey;
             Action<KeypadKey> toggleHandler = key =>

@@ -23,7 +23,7 @@ namespace Cr1140.Avalonia.Input;
 /// <c>Dispatcher.UIThread.Post</c>). Gesture timing is configurable via
 /// <see cref="KeyGestureOptions"/>; every event fires on a background thread.
 /// </remarks>
-public sealed class EvdevKeypadInput : IInputBackend, IDisposable
+public sealed class EvdevKeypadInput : IInputBackend, IKeypadInput, IDisposable
 {
     private const int EventSize = 24;
     private const ushort EvKey = 1;

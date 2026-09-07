@@ -21,6 +21,14 @@ namespace Cr1140.Avalonia.Display;
 public static class Backlight
 {
     /// <summary>
+    /// Filesystem prefix prepended to every <c>/sys/class/backlight/</c> path. Empty
+    /// (the default) targets the real device sysfs; the desktop emulator
+    /// (<c>Cr1140.Avalonia.Emulator.EmulatedDevice</c>) points it at a seeded temp tree
+    /// so backlight writes are observable off-device. Not thread-safe to change while in use.
+    /// </summary>
+    internal static string Root { get; set; } = "";
+
+    /// <summary>
     /// The display backlight node name under <c>/sys/class/backlight/</c> on the
     /// CR1140/CR1141. Mirrors the Rust <c>cr1140-hal</c> <c>sys::BACKLIGHT</c>.
     /// </summary>
@@ -43,7 +51,7 @@ public static class Backlight
         try
         {
             File.WriteAllText(
-                $"/sys/class/backlight/{name}/brightness",
+                $"{Root}/sys/class/backlight/{name}/brightness",
                 value.ToString(CultureInfo.InvariantCulture));
             return true;
         }
@@ -57,13 +65,13 @@ public static class Backlight
     /// Read the backlight's current brightness (for save/restore); <see langword="null"/>
     /// if the node is missing or unparseable.
     /// </summary>
-    public static uint? Read(string name) => ReadUint($"/sys/class/backlight/{name}/brightness");
+    public static uint? Read(string name) => ReadUint($"{Root}/sys/class/backlight/{name}/brightness");
 
     /// <summary>
     /// Read the backlight's <c>max_brightness</c> (for scaling); <see langword="null"/> if
     /// the node is missing or unparseable.
     /// </summary>
-    public static uint? Max(string name) => ReadUint($"/sys/class/backlight/{name}/max_brightness");
+    public static uint? Max(string name) => ReadUint($"{Root}/sys/class/backlight/{name}/max_brightness");
 
     /// <summary>
     /// Set the backlight to <paramref name="percent"/> (0–100, clamped) of its
@@ -104,7 +112,7 @@ public static class Backlight
     {
         try
         {
-            var names = Directory.GetFileSystemEntries("/sys/class/backlight")
+            var names = Directory.GetFileSystemEntries($"{Root}/sys/class/backlight")
                 .Select(Path.GetFileName)
                 .Where(n => !string.IsNullOrEmpty(n))
                 .Select(n => n!)

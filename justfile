@@ -73,6 +73,10 @@ run-avalonia: publish-avalonia
     scp -r cr1140-avalonia-demo/publish/linux-arm64/* {{user}}@{{host}}:{{avdir}}/
     ssh {{user}}@{{host}} 'DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=1 {{avdir}}/Cr1140.AvaloniaDemo /dev/input/event1'
 
+# Run the Avalonia demo in the desktop emulator (CR1140 bezel window on this host; no device needed)
+run-emulator:
+    dotnet run --project cr1140-avalonia-demo -- --emulator
+
 # Restore stock services (unmask CODESYS/app-launcher, stop cr1140-avalonia)
 restore-avalonia:
     scp cr1140-avalonia-demo/deploy/restore.sh {{user}}@{{host}}:/tmp/
