@@ -99,10 +99,10 @@ public sealed class PerfOverlayOptions
     public bool StartVisible { get; set; }
 
     /// <summary>
-    /// The optional <see cref="EvdevKeypadInput"/> instance whose gesture events drive
+    /// The optional <see cref="IKeypadInput"/> source whose gesture events drive
     /// visibility toggling. If <c>null</c>, no keypad toggle is wired. Default <c>null</c>.
     /// </summary>
-    public EvdevKeypadInput? ToggleKeypad { get; set; }
+    public IKeypadInput? ToggleKeypad { get; set; }
 
     /// <summary>
     /// The physical key on the keypad that toggles overlay visibility. Only used when

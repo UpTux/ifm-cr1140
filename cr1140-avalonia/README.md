@@ -577,6 +577,147 @@ For defense-in-depth, let systemd arm the SoC **hardware** watchdog as a backsto
 systemd itself hangs — a drop-in `/etc/systemd/system.conf.d/` file with
 `[Manager]\nRuntimeWatchdogSec=60`, then `systemctl daemon-reexec`.
 
+## Desktop emulator
+
+The **`Cr1140.Avalonia.Emulator`** namespace (new in **0.12.0**) lets any CR1140/CR1141 Avalonia operator-panel app run in a **desktop window** on macOS, Windows, or Linux for a fast **edit→run loop**, instead of cross-publishing and deploying to the physical panel over ssh. The emulator renders your app at the panel's 800×480 resolution (rotation-aware) inside a device bezel, provides an on-screen keypad plus physical-keyboard mapping (F1–F6, arrow keys, Enter), and **emulates the device's actuation surfaces** — the status LED, keypad backlight, and display-backlight dimming — by redirecting the real `LedSysfs` and `Backlight` writes to a temporary sysfs directory tree. Your application code is **byte-identical** on device and desktop; the same `LedSysfs.SetTyped(...)` / `Backlight.SetPercent(...)` calls work in both environments.
+
+### IKeypadInput: the keypad seam
+
+The **`IKeypadInput`** interface (namespace `Cr1140.Avalonia.Input`) is the shared managed keypad event surface that lets the same view-model run unchanged on the device and in the emulator. It exposes six events, each `event Action<KeypadKey>?`:
+
+- `KeyPressed` — a key goes down
+- `KeyReleased` — a key comes up
+- `KeyTapped` — short press-and-release (no second tap)
+- `KeyDoubleTapped` — two taps within the double-tap window
+- `KeyHeld` — key stays down past the hold threshold (long-press, fires once)
+- `KeyHolding` — repeats while the key stays down after `KeyHeld` (press-and-hold auto-repeat)
+
+On device, **`EvdevKeypadInput`** implements `IKeypadInput` by reading `/dev/input/event1` via Linux evdev. On desktop, **`WindowKeypadInput`** implements the same interface by listening to the window's keyboard (physical keys F1–F6, arrows, Enter/Return) and on-screen button presses, deriving the same tap/double-tap/hold/holding gestures via the shared pure `KeyGestureDetector` on a 25 ms UI-thread `DispatcherTimer`. Consuming an app off **`IKeypadInput`** (e.g. `MainViewModel(IKeypadInput keypad)`) is what lets the same view-model run on both.
+
+### Usage
+
+Your app's classic-desktop startup builds an `AppBuilder` with `UsePlatformDetect()` and `StartWithClassicDesktopLifetime(args)`, creates a `WindowKeypadInput` + `EmulatedDevice`, and in `OnFrameworkInitializationCompleted` sets `desktop.MainWindow` to the window returned by **`Cr1140Emulator.BuildWindow(...)`**:
+
+```csharp
+using Avalonia;
+using Avalonia.Controls.ApplicationLifetimes;
+using Cr1140.Avalonia.Emulator;
+using Cr1140.Avalonia.Input;
+
+namespace MyKeypadApp;
+
+internal static class Program
+{
+    public static void Main(string[] args)
+    {
+        BuildAvaloniaApp()
+            .UsePlatformDetect()          // windowing platform (macOS/Windows/Linux)
+            .StartWithClassicDesktopLifetime(args);
+    }
+
+    private static AppBuilder BuildAvaloniaApp()
+        => AppBuilder.Configure<App>();
+}
+
+public class App : Application
+{
+    private WindowKeypadInput? _keypad;
+    private EmulatedDevice? _device;
+
+    public override void OnFrameworkInitializationCompleted()
+    {
+        if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
+        {
+            // Desktop emulator: create the keypad and hardware shim
+            _keypad = new WindowKeypadInput();
+            _device = new EmulatedDevice();  // single-instance; redirects LedSysfs/Backlight roots
+
+            // Build your app's root view (consuming IKeypadInput)
+            var mainView = new MainView(new MainViewModel(_keypad));
+
+            // Host it in the emulator bezel
+            desktop.MainWindow = Cr1140Emulator.BuildWindow(
+                mainView,
+                _keypad,
+                _device,
+                new EmulatorOptions
+                {
+                    Title = "My Keypad App (Emulator)",
+                    ShowKeypad = true,
+                    ShowKeyboardHints = true,
+                });
+
+            // Attach the window's keyboard events to the keypad input
+            _keypad.Attach(desktop.MainWindow);
+        }
+
+        base.OnFrameworkInitializationCompleted();
+    }
+}
+```
+
+The consuming app must reference **`Avalonia.Desktop`** (the emulator itself uses only core Avalonia and does not pull the desktop platform into the package):
+
+```bash
+dotnet add package Avalonia.Desktop
+```
+
+### Emulated surfaces
+
+The **`EmulatedDevice`** creates a seeded temporary sysfs directory tree and redirects the new internal `LedSysfs.Root` / `Backlight.Root` hooks at it, so an app's **real** `LedSysfs` / `Backlight` / `LedDriver` writes land in the temp tree and become observable off-device — the device code path is byte-identical (still file I/O). It exposes live properties that the `EmulatorWindow` polls at 33 ms to update the on-screen indicators:
+
+- **`StatusColor`** (RGB) — the status light, reflecting `LedSysfs.SetTyped(Led.Status*, ...)` writes
+- **`KbdColor`** (RGB) — the keypad backlight, reflecting `LedSysfs.SetKbdBacklight(r, g, b)` or `LedDriver.Tick()` writes
+- **`BacklightPercent`** (0..100) — the display brightness, reflecting `Backlight.SetPercent(...)` writes
+
+The bezel renders:
+
+- Your app's root view at the rotation-aware logical panel size (800×480 landscape, or 480×800 portrait if rotated 90°/270°)
+- An on-screen keypad in the panel's **physical single-row layout** (`F6 F4 F2 · d-pad · F1 F3 F5`) wired to the `WindowKeypadInput` via pointer events; each F-key keeps its fixed hardware label and shows a **live caption** of the soft-key it currently triggers (supply it via `EmulatorOptions.KeyCaptions`), so captions follow the app's footer layout
+- A live **status-LED dot** (bottom-right corner, like the panel) reflecting the app's status-light writes
+- A **keypad-backlight tint** over the on-screen keypad reflecting the app's keypad-backlight writes
+- A **screen-dim overlay** reflecting the display-backlight percentage (lower backlight → darker overlay, matching the real panel)
+
+Physical-keyboard mapping (call `_keypad.Attach(inputElement)` on the window or a focused control):
+
+| Physical Key | `KeypadKey` |
+|-------------|-----------|
+| F1–F6       | `F1`–`F6` |
+| Arrow keys  | `Up`, `Down`, `Left`, `Right` |
+| Enter/Return | `Enter` |
+
+### Emulator options
+
+**`EmulatorOptions`** configures the bezel window:
+
+| Property | Type | Default | Description |
+|----------|------|---------|-------------|
+| `PanelWidth` | `int` | `800` | Panel logical width (swapped if rotated 90°/270°) |
+| `PanelHeight` | `int` | `480` | Panel logical height (swapped if rotated 90°/270°) |
+| `Rotation` | `DisplayRotation` | `None` | Display rotation: `None`, `Clockwise90`, `Clockwise180`, `Clockwise270` |
+| `Title` | `string?` | `null` | Window title (default: "CR1140 Emulator") |
+| `ShowKeypad` | `bool` | `true` | Show the on-screen keypad |
+| `ShowKeyboardHints` | `bool` | `true` | Show physical-key hints (F1–F6, arrows) on the on-screen keypad |
+| `KeyCaptions` | `Func<KeypadKey,string?>?` | `null` | Live caption per key, shown under the fixed hardware label; polled ~30 Hz so it follows the soft-key footer layout. Return the action the key triggers, or `null` for none |
+
+### Scope: actuation surfaces only
+
+The emulator emulates the device's **actuation surfaces** — the display (app screen at panel resolution + backlight dimming), the keypad, the status LED, and the keypad backlight. Read-only **system telemetry** (`SystemTelemetry` / `ProcFs` / `DeviceInfo`) is deliberately **NOT redirected** — it reads the real host, so on macOS the Telemetry screen shows `?`/nulls and on a Linux host it shows host stats. This is intentional: the emulator provides honest host readout, never fabricated device values.
+
+### Running the demo emulator
+
+The **`cr1140-avalonia-demo`** reference app auto-selects the emulator on macOS/Windows (off-device), or when forced with `--emulator` or `CR1140_EMULATOR=1` on a Linux desktop. On the device (Linux, no flag) the real fbdev/DRM `StartLinuxDirect` path is unchanged.
+
+Run locally:
+
+```bash
+just run-emulator
+# or
+dotnet run --project cr1140-avalonia-demo
+```
+
+The demo's `Program.cs` splits into `RunEmulator` (classic-desktop lifetime with `WindowKeypadInput` + `EmulatedDevice`) and `RunDevice` (the prior evdev + rotating fbdev/DRM path). `MainViewModel`'s constructor now takes **`IKeypadInput`** (not the concrete `EvdevKeypadInput`), so the same view-model runs in both environments.
+
 ## Design Note
 
 `EvdevKeypadInput` raises a **managed `KeyPressed` event** on a background reader thread. Your application code subscribes to this event and drives navigation, view-model state, or an FSM — the **app-driven pattern**. 

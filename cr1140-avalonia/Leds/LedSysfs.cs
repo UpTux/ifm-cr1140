@@ -18,6 +18,14 @@ namespace Cr1140.Avalonia.Leds;
 /// </remarks>
 public static class LedSysfs
 {
+    /// <summary>
+    /// Filesystem prefix prepended to every <c>/sys/class/leds/</c> path. Empty (the
+    /// default) targets the real device sysfs; the desktop emulator
+    /// (<c>Cr1140.Avalonia.Emulator.EmulatedDevice</c>) points it at a seeded temp tree
+    /// so LED writes are observable off-device. Not thread-safe to change while in use.
+    /// </summary>
+    internal static string Root { get; set; } = "";
+
     /// <summary>The sysfs leaf name of <paramref name="led"/> under <c>/sys/class/leds/</c>.</summary>
     public static string Name(Led led) => led switch
     {
@@ -50,7 +58,7 @@ public static class LedSysfs
         try
         {
             File.WriteAllText(
-                $"/sys/class/leds/{name}/brightness",
+                $"{Root}/sys/class/leds/{name}/brightness",
                 value.ToString(CultureInfo.InvariantCulture));
             return true;
         }
@@ -69,7 +77,7 @@ public static class LedSysfs
         string content;
         try
         {
-            content = File.ReadAllText($"/sys/class/leds/{name}/brightness");
+            content = File.ReadAllText($"{Root}/sys/class/leds/{name}/brightness");
         }
         catch
         {
@@ -101,7 +109,7 @@ public static class LedSysfs
     {
         try
         {
-            var names = Directory.GetFileSystemEntries("/sys/class/leds")
+            var names = Directory.GetFileSystemEntries($"{Root}/sys/class/leds")
                 .Select(Path.GetFileName)
                 .Where(n => !string.IsNullOrEmpty(n))
                 .Select(n => n!)

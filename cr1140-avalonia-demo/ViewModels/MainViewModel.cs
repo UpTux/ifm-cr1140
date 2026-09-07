@@ -13,14 +13,14 @@ namespace Cr1140.AvaloniaDemo.ViewModels;
 public sealed class MainViewModel : ViewModelBase
 {
     private readonly NavigationController _nav;
-    private readonly EvdevKeypadInput _keypad;
+    private readonly IKeypadInput _keypad;
 
     private string _title;
     private object? _currentContent;
     private SoftKeyViewModel[] _softKeys;
     private SoftKeyFooterLayout _footerLayout = SoftKeyFooterLayout.Physical;
 
-    public MainViewModel(EvdevKeypadInput keypad)
+    public MainViewModel(IKeypadInput keypad)
     {
         _keypad = keypad;
         _title = "Baler";
@@ -94,6 +94,21 @@ public sealed class MainViewModel : ViewModelBase
     /// <summary>Forward a keypad event to the Key Events demo VM (on the UI thread).</summary>
     private void RecordKeyEvent(KeyEventKind kind, KeypadKey key)
         => Dispatcher.UIThread.Post(() => _nav.KeyEvents.Record(kind, key));
+
+    /// <summary>
+    /// The live soft-key label the given hardware key triggers under the current footer
+    /// layout (null for non-function keys or an empty label). Lets the desktop emulator
+    /// caption its on-screen keypad buttons so they follow the footer as it toggles.
+    /// </summary>
+    public string? CaptionForKey(KeypadKey hardware)
+    {
+        var logical = SoftKeyLayoutMap.ToLogical(hardware, _footerLayout);
+        int idx = (int)logical;
+        if (idx < 0 || idx >= _softKeys.Length)
+            return null;
+        var label = _softKeys[idx].Label;
+        return string.IsNullOrEmpty(label) ? null : label;
+    }
 
     /// <summary>
     /// Called by NavigationController to update the screen state.

@@ -210,6 +210,97 @@ git push origin avalonia-v0.3.0
 The workflow builds, packs, and publishes to NuGet.org automatically (requires
 `NUGET_API_KEY` secret configured in the repo).
 
+
+## Desktop emulator (fast development loop)
+
+The on-device development loop — cross-publish (`just publish-avalonia`) → scp to the
+panel → ssh in and run — is **slow** (tens of seconds per cycle). The **desktop
+emulator** (new in `Cr1140.Avalonia` **0.12.0**) runs the **same app** in a **desktop
+window** on your dev host (macOS / Windows / Linux) in **seconds**, eliminating the
+cross-compile + deploy step during active development.
+
+### How to run the emulator
+
+In the `cr1140-avalonia-demo`, the emulator auto-selects off Linux (on macOS/Windows it
+is the default), or force it explicitly with `--emulator` or the `CR1140_EMULATOR=1` env
+var. On the device (Linux, no flag) the real fbdev/DRM path is unchanged.
+
+```sh
+# Quick emulator run (auto-selects on macOS/Windows)
+just run-emulator
+
+# Or equivalently:
+dotnet run --project cr1140-avalonia-demo
+
+# Force emulator mode on Linux desktop
+cr1140-avalonia-demo --emulator
+# or: CR1140_EMULATOR=1 cr1140-avalonia-demo
+```
+
+Display rotation (`--rotate=90|180|270` or `CR1140_ROTATE`) still applies — the bezel
+window sizes to the rotated logical resolution (e.g. 90°/270° produce a portrait
+480×800 window).
+
+### What it emulates
+
+The emulator presents your app in a **device bezel** window at the panel's native 800×480
+resolution (or rotated logical size). It emulates the device's actuation surfaces:
+
+- **Keypad input**: physical keyboard (F1–F6 / arrow keys / Enter/Return) and on-screen
+  button clicks both produce the same `IKeypadInput` events (`KeyPressed`, `KeyTapped`,
+  `KeyHeld`, etc.) as the on-device `EvdevKeypadInput`. The bezel shows a visual keypad
+  (physical single row `F6 F4 F2 · d-pad · F1 F3 F5`, each F-key captioned with the
+  soft-key it currently triggers) wired to pointer events; keyboard hints appear when enabled
+  (`ShowKeyboardHints` in `EmulatorOptions`).
+- **Display output**: the app's root view renders at the panel size, with a live
+  **screen-dimming overlay** reflecting the app's `Backlight` writes (0–100 %).
+- **Status LED**: a live **RGB status-LED dot** in the bezel, reflecting the app's
+  `LedSysfs` / `LedDriver` / `Cr1140.Avalonia.Leds.StatusLed` RGB writes.
+- **Keypad backlight**: a live **RGB tint** over the on-screen keypad, reflecting the
+  app's `Cr1140.Avalonia.Leds.KeypadBacklight` RGB writes.
+
+The bezel polls the `EmulatedDevice` at 33 ms (30 fps) to refresh the status LED, keypad
+backlight, and screen-dimming overlay — so LED/backlight changes appear within one frame.
+
+### Architecture: the emulator seam
+
+The seam that lets the **same code** run on-device and off-device is:
+
+- **`IKeypadInput`** interface (namespace `Cr1140.Avalonia.Input`): the managed keypad
+  event surface (`KeyPressed`, `KeyReleased`, `KeyTapped`, `KeyDoubleTapped`, `KeyHeld`,
+  `KeyHolding` — all `event Action<KeypadKey>?`). Implemented by **on-device**
+  `EvdevKeypadInput` (evdev `/dev/input/event1` reader + gesture timer) and **desktop**
+  `WindowKeypadInput` (keyboard + on-screen button source + the same gesture detector).
+  A view-model taking `IKeypadInput` (e.g. `MainViewModel(IKeypadInput)`) works unchanged
+  in both environments.
+- **`EmulatedDevice`** (namespace `Cr1140.Avalonia.Emulator`): off-device hardware shim.
+  Creates a seeded **temporary sysfs directory tree** and redirects the internal
+  `LedSysfs.Root` / `Backlight.Root` static hooks to it, so the app's **real**
+  `LedSysfs` / `Backlight` / `LedDriver` writes (the byte-identical device code path —
+  still file I/O) land in the temp tree and become observable off-device. Exposes live
+  `StatusColor`, `KbdColor`, `BacklightPercent` properties read by the bezel. `Dispose()`
+  restores the roots to empty and deletes the temp tree. Single-instance (the roots are
+  shared statics).
+
+The `Cr1140.Avalonia.Emulator` types (`WindowKeypadInput`, `EmulatedDevice`,
+`EmulatorWindow`, `Cr1140Emulator.BuildWindow`) use **only core Avalonia** — they do NOT
+pull `Avalonia.Desktop`/Skia/Themes into the package. The **consuming app** provides the
+windowing platform (add `<PackageReference Include="Avalonia.Desktop" />` and call
+`AppBuilder.Configure<App>().UsePlatformDetect().StartWithClassicDesktopLifetime(args)`
+from `Program.cs`). See `cr1140-avalonia-demo/Program.cs` for the full split:
+`RunEmulator(args)` builds the `AppBuilder` with `UsePlatformDetect()` and constructs
+`WindowKeypadInput` + `EmulatedDevice`, while `RunDevice(args)` uses the unchanged evdev
++ rotating fbdev/DRM startup.
+
+### Scope boundary: system telemetry
+
+The emulator emulates the device's **actuation surfaces** (display, keypad, status LED,
+keypad backlight), but read-only **system telemetry** (`SystemTelemetry` / `ProcFs` /
+`DeviceInfo` from `Cr1140.Avalonia.Telemetry`) is deliberately **not redirected** — it
+reads the **real host**. On macOS this means the Telemetry screen shows `?` / nulls
+(ProcFS is Linux-only); on a Linux desktop host it shows **host** stats (not fabricated
+device values). This is **intentional** — the emulator provides honest host readout, never
+fake device telemetry.
 ## Build and deploy
 
 All recipes live in the **root `justfile`** (not the Avalonia directory — it has no
