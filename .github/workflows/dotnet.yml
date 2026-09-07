@@ -1,0 +1,52 @@
+name: .NET
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'cr1140-avalonia/**'
+      - 'cr1140-avalonia-demo/**'
+      - 'Cr1140.Avalonia.sln'
+      - '.github/workflows/dotnet.yml'
+  pull_request:
+    paths:
+      - 'cr1140-avalonia/**'
+      - 'cr1140-avalonia-demo/**'
+      - 'Cr1140.Avalonia.sln'
+      - '.github/workflows/dotnet.yml'
+
+# Cancel in-progress runs for the same ref when a newer commit is pushed.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+# Least privilege: jobs only read the repo contents.
+permissions:
+  contents: read
+
+jobs:
+  # Restore, build, and test the Avalonia solution on PRs. The library targets
+  # net8.0 and the demo targets net10.0, so both SDKs are installed.
+  build-test:
+    name: build / test Cr1140.Avalonia.sln
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: |
+            8.0.x
+            10.0.x
+
+      - name: Restore
+        run: dotnet restore Cr1140.Avalonia.sln
+
+      - name: Build
+        run: dotnet build Cr1140.Avalonia.sln -c Release --no-restore
+
+      # No test projects exist yet; this is a no-op that stays green and
+      # automatically exercises any test project added to the solution later.
+      - name: Test
+        run: dotnet test Cr1140.Avalonia.sln -c Release --no-build --verbosity normal
