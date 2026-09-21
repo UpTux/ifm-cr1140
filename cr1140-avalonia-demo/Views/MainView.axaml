@@ -9,36 +9,40 @@
              x:CompileBindings="True"
              x:DataType="vm:MainViewModel">
   
-  <Grid RowDefinitions="Auto,*,Auto">
-    <!-- Header -->
-    <Border Grid.Row="0" 
-            Background="#1a1a1a" 
-            BorderBrush="#333333" 
-            BorderThickness="0,0,0,2"
-            Padding="16,12">
-      <TextBlock Text="{Binding Title}" 
-                 FontSize="28" 
-                 FontWeight="Bold" 
-                 Foreground="#e0e0e0"
-                 HorizontalAlignment="Center"/>
-    </Border>
-
-    <!-- Content Area -->
-    <ContentControl Grid.Row="1" 
-                    Content="{Binding CurrentContent}"
-                    Background="#0d0d0d"/>
-
-    <!-- Footer: reusable SoftKeyFooter from the Cr1140.Avalonia package.
-         Layout defaults to Physical (F6 F4 F2 · d-pad · F1 F3 F5); the Settings
-         screen (F2) toggles Physical/Natural via MainViewModel.FooterLayout. -->
-    <cr:SoftKeyFooter Grid.Row="2"
+  <DockPanel>
+    <!-- Footer FIRST so a Right/Left dock spans the full panel height (Bottom/Top spans
+         the full width). Docks + orients from the device profile: a bottom horizontal
+         strip on CR1140/CR1141, a right vertical column on the CR1102 so each label sits
+         beside the physical key it triggers. -->
+    <cr:SoftKeyFooter DockPanel.Dock="{Binding FooterDock}"
+                      Orientation="{Binding FooterOrientation}"
+                      FunctionKeyCount="{Binding FunctionKeyCount}"
                       Layout="{Binding FooterLayout}"
                       F1="{Binding SoftKeys[0].Label}"
                       F2="{Binding SoftKeys[1].Label}"
                       F3="{Binding SoftKeys[2].Label}"
                       F4="{Binding SoftKeys[3].Label}"
                       F5="{Binding SoftKeys[4].Label}"
-                      F6="{Binding SoftKeys[5].Label}"/>
-  </Grid>
+                      F6="{Binding SoftKeys[5].Label}"
+                      F7="{Binding SoftKeys[6].Label}"
+                      F8="{Binding SoftKeys[7].Label}"/>
+
+    <!-- Header -->
+    <Border DockPanel.Dock="Top"
+            Background="#1a1a1a"
+            BorderBrush="#333333"
+            BorderThickness="0,0,0,2"
+            Padding="16,12">
+      <TextBlock Text="{Binding Title}"
+                 FontSize="28"
+                 FontWeight="Bold"
+                 Foreground="#e0e0e0"
+                 HorizontalAlignment="Center"/>
+    </Border>
+
+    <!-- Content Area (fills the space left by the header + footer) -->
+    <ContentControl Content="{Binding CurrentContent}"
+                    Background="#0d0d0d"/>
+  </DockPanel>
 
 </UserControl>

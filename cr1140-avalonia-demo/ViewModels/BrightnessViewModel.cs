@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
+using Cr1140.AvaloniaDemo;
 using Cr1140.Avalonia.Display;
 
 namespace Cr1140.AvaloniaDemo.ViewModels;
@@ -22,8 +23,8 @@ public sealed class BrightnessViewModel : ViewModelBase
     /// <summary>Adjustment granularity per keypress, in percentage points.</summary>
     private const int StepPercent = 10;
 
-    private readonly string _node = Backlight.Default;
-    private uint _max = Backlight.MaxHint;
+    private readonly string _node = Program.Profile.BacklightNode;
+    private uint _max = Program.Profile.BacklightMaxHint;
 
     private int _percent = 100;
     private string _rawText = "";

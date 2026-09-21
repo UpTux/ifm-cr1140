@@ -24,6 +24,12 @@ public enum KeypadKey
     /// <summary>Soft-key F6 (evdev <c>KEY_F6</c>, code 64).</summary>
     F6,
 
+    /// <summary>Soft-key F7 (evdev <c>KEY_F7</c>, code 65). Present on 8-key SKUs such as the CR1102 (evdev code 65 confirmed live 2026-09-21).</summary>
+    F7,
+
+    /// <summary>Soft-key F8 (evdev <c>KEY_F8</c>, code 66). Present on 8-key SKUs such as the CR1102 (evdev code 66 confirmed live 2026-09-21).</summary>
+    F8,
+
     /// <summary>Up arrow (evdev <c>KEY_UP</c>, code 103).</summary>
     Up,
 

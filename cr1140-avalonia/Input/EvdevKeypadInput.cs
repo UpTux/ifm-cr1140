@@ -5,15 +5,16 @@ using System.Threading;
 using Avalonia.Input;
 using Avalonia.Input.Raw;
 using Avalonia.LinuxFramebuffer.Input;
+using Cr1140.Avalonia.Devices;
 
 namespace Cr1140.Avalonia.Input;
 
 /// <summary>
-/// An Avalonia <see cref="IInputBackend"/> that reads the CR1140/CR1141 gpio-keys
-/// keypad from an evdev device node (default <c>/dev/input/event1</c>) and raises
-/// managed key events: <see cref="KeyPressed"/> and <see cref="KeyReleased"/> for raw
-/// down/up, plus the derived gestures <see cref="KeyTapped"/>, <see cref="KeyDoubleTapped"/>,
-/// <see cref="KeyHeld"/> (long-press), and <see cref="KeyHolding"/> (press-and-hold repeat).
+/// An Avalonia <see cref="IInputBackend"/> that reads the CR1140/CR1141/CR1102 keypad
+/// from one or more evdev device nodes and raises managed key events: <see cref="KeyPressed"/>
+/// and <see cref="KeyReleased"/> for raw down/up, plus the derived gestures <see cref="KeyTapped"/>,
+/// <see cref="KeyDoubleTapped"/>, <see cref="KeyHeld"/> (long-press), and <see cref="KeyHolding"/>
+/// (press-and-hold repeat).
 /// </summary>
 /// <remarks>
 /// Avalonia's stock LinuxFramebuffer input (LibInput / EvDev) delivers only
@@ -22,6 +23,11 @@ namespace Cr1140.Avalonia.Input;
 /// drive your UI from the events (marshal to the UI thread with
 /// <c>Dispatcher.UIThread.Post</c>). Gesture timing is configurable via
 /// <see cref="KeyGestureOptions"/>; every event fires on a background thread.
+/// <para>
+/// This class can read from multiple evdev nodes concurrently (used for CR1102's
+/// "PDM3 virtual keyboard" uinput devices). <see cref="ForDevice"/> auto-discovers
+/// nodes by <see cref="DeviceProfile.KeypadDeviceName"/> when present.
+/// </para>
 /// </remarks>
 public sealed class EvdevKeypadInput : IInputBackend, IKeypadInput, IDisposable
 {
@@ -38,6 +44,10 @@ public sealed class EvdevKeypadInput : IInputBackend, IKeypadInput, IDisposable
         [62] = KeypadKey.F4,
         [63] = KeypadKey.F5,
         [64] = KeypadKey.F6,
+        // F7/F8 exist on 8-key SKUs (e.g. CR1102). Standard Linux KEY_F7/KEY_F8; the CR1102
+        // codes 65/66 were confirmed live 2026-09-21. Harmless on 6-key SKUs that never emit them.
+        [65] = KeypadKey.F7,
+        [66] = KeypadKey.F8,
         [103] = KeypadKey.Up,
         [108] = KeypadKey.Down,
         [105] = KeypadKey.Left,
@@ -45,13 +55,11 @@ public sealed class EvdevKeypadInput : IInputBackend, IKeypadInput, IDisposable
         [28] = KeypadKey.Enter
     };
 
-    private readonly string _devicePath;
+    private readonly IReadOnlyList<string> _devicePaths;
     private readonly CancellationTokenSource _cts = new();
     private readonly KeyGestureDetector _gestures;
     private readonly object _gate = new();
-
-    private Thread? _readerThread;
-    private FileStream? _stream;
+    private readonly List<Thread> _readerThreads = new();
     private Timer? _tickTimer;
     private IInputRoot? _inputRoot;
     private Action<RawInputEventArgs>? _onInput; // Future text-entry could dispatch RawKeyEventArgs via this
@@ -76,7 +84,7 @@ public sealed class EvdevKeypadInput : IInputBackend, IKeypadInput, IDisposable
 
     /// <summary>Creates a backend bound to an evdev device node with default gesture timing.</summary>
     /// <param name="devicePath">The evdev node to read, e.g. <c>/dev/input/event1</c>.</param>
-    public EvdevKeypadInput(string devicePath) : this(devicePath, null)
+    public EvdevKeypadInput(string devicePath) : this(new[] { devicePath }, null)
     {
     }
 
@@ -84,8 +92,19 @@ public sealed class EvdevKeypadInput : IInputBackend, IKeypadInput, IDisposable
     /// <param name="devicePath">The evdev node to read, e.g. <c>/dev/input/event1</c>.</param>
     /// <param name="gestureOptions">Tap/double-tap/hold thresholds, or null for defaults.</param>
     public EvdevKeypadInput(string devicePath, KeyGestureOptions? gestureOptions)
+        : this(new[] { devicePath }, gestureOptions)
     {
-        _devicePath = devicePath;
+    }
+
+    /// <summary>
+    /// Creates a backend bound to multiple evdev device nodes with custom gesture timing.
+    /// Each node is read by a dedicated thread; all threads share the same gesture detector.
+    /// </summary>
+    /// <param name="devicePaths">The evdev nodes to read, e.g. <c>/dev/input/event1</c>.</param>
+    /// <param name="gestureOptions">Tap/double-tap/hold thresholds, or null for defaults.</param>
+    public EvdevKeypadInput(IReadOnlyList<string> devicePaths, KeyGestureOptions? gestureOptions = null)
+    {
+        _devicePaths = devicePaths;
         _gestures = new KeyGestureDetector(gestureOptions);
         _gestures.Tapped += k => KeyTapped?.Invoke(k);
         _gestures.DoubleTapped += k => KeyDoubleTapped?.Invoke(k);
@@ -93,7 +112,83 @@ public sealed class EvdevKeypadInput : IInputBackend, IKeypadInput, IDisposable
         _gestures.Holding += k => KeyHolding?.Invoke(k);
     }
 
-    /// <summary>Called by the Avalonia LinuxFramebuffer platform; starts the evdev reader thread.</summary>
+    /// <summary>
+    /// Creates a backend for a specific device profile. If <see cref="DeviceProfile.KeypadDeviceName"/>
+    /// is non-null and non-empty, the backend auto-discovers matching evdev nodes by device name
+    /// (e.g. "PDM3 virtual keyboard" for CR1102); otherwise it uses
+    /// <see cref="DeviceProfile.KeypadDevicePath"/>. Gesture timing can be customized via
+    /// <paramref name="gestureOptions"/>.
+    /// </summary>
+    /// <param name="profile">The device profile to configure for.</param>
+    /// <param name="gestureOptions">Tap/double-tap/hold thresholds, or null for defaults.</param>
+    /// <returns>A new <see cref="EvdevKeypadInput"/> instance.</returns>
+    public static EvdevKeypadInput ForDevice(DeviceProfile profile, KeyGestureOptions? gestureOptions = null)
+    {
+        if (!string.IsNullOrEmpty(profile.KeypadDeviceName))
+        {
+            var discovered = DiscoverByName(profile.KeypadDeviceName);
+            if (discovered.Count > 0)
+                return new EvdevKeypadInput(discovered, gestureOptions);
+        }
+        return new EvdevKeypadInput(profile.KeypadDevicePath, gestureOptions);
+    }
+
+    /// <summary>
+    /// Discovers evdev device nodes by device name. Scans <c>/dev/input/event*</c> and
+    /// returns the sorted list of paths whose <c>/sys/class/input/eventN/device/name</c>
+    /// matches <paramref name="deviceName"/> (case-sensitive, ordinal).
+    /// </summary>
+    /// <param name="deviceName">The device name to match, e.g. "PDM3 virtual keyboard".</param>
+    /// <returns>Sorted list of matching <c>/dev/input/eventN</c> paths, or empty on error/no match.</returns>
+    public static IReadOnlyList<string> DiscoverByName(string deviceName)
+    {
+        var matches = new List<string>();
+        try
+        {
+            var inputDir = "/dev/input";
+            if (!Directory.Exists(inputDir))
+                return matches;
+
+            var entries = Directory.GetFiles(inputDir, "event*");
+            foreach (var eventPath in entries)
+            {
+                try
+                {
+                    var eventNode = Path.GetFileName(eventPath);
+                    var sysPath = $"/sys/class/input/{eventNode}/device/name";
+                    if (File.Exists(sysPath))
+                    {
+                        var name = File.ReadAllText(sysPath).TrimEnd('\n', '\r');
+                        if (name == deviceName)
+                        {
+                            matches.Add(eventPath);
+                        }
+                    }
+                }
+                catch (IOException)
+                {
+                    // Skip this device on read error
+                }
+                catch (UnauthorizedAccessException)
+                {
+                    // Skip devices we can't read
+                }
+            }
+        }
+        catch (IOException)
+        {
+            // Return empty list on directory enumeration error
+        }
+        catch (UnauthorizedAccessException)
+        {
+            // Return empty list on permission error
+        }
+
+        matches.Sort(StringComparer.Ordinal);
+        return matches;
+    }
+
+    /// <summary>Called by the Avalonia LinuxFramebuffer platform; starts the evdev reader threads.</summary>
     public void Initialize(IScreenInfoProvider info, Action<RawInputEventArgs> onInput)
     {
         _onInput = onInput;
@@ -101,12 +196,20 @@ public sealed class EvdevKeypadInput : IInputBackend, IKeypadInput, IDisposable
         // Stopped until a key press; a down-event arms it, OnTick disarms it once idle.
         _tickTimer = new Timer(OnTick, null, Timeout.Infinite, Timeout.Infinite);
 
-        _readerThread = new Thread(ReaderLoop)
+        // Start one reader thread per device path
+        foreach (var devicePath in _devicePaths)
         {
-            IsBackground = true,
-            Name = "EvdevKeypadReader"
-        };
-        _readerThread.Start();
+            var thread = new Thread(() => ReaderLoop(devicePath))
+            {
+                IsBackground = true,
+                Name = $"EvdevKeypadReader:{Path.GetFileName(devicePath)}"
+            };
+            lock (_gate)
+            {
+                _readerThreads.Add(thread);
+            }
+            thread.Start();
+        }
     }
 
     /// <summary>Called by the Avalonia LinuxFramebuffer platform to supply the input root.</summary>
@@ -115,14 +218,15 @@ public sealed class EvdevKeypadInput : IInputBackend, IKeypadInput, IDisposable
         _inputRoot = root;
     }
 
-    private void ReaderLoop()
+    private void ReaderLoop(string devicePath)
     {
         var token = _cts.Token;
         var buffer = new byte[EventSize];
+        FileStream? stream = null;
 
         try
         {
-            _stream = new FileStream(_devicePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
+            stream = new FileStream(devicePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
 
             while (!token.IsCancellationRequested)
             {
@@ -130,7 +234,7 @@ public sealed class EvdevKeypadInput : IInputBackend, IKeypadInput, IDisposable
                 int totalRead = 0;
                 while (totalRead < EventSize)
                 {
-                    int bytesRead = _stream.Read(buffer, totalRead, EventSize - totalRead);
+                    int bytesRead = stream.Read(buffer, totalRead, EventSize - totalRead);
                     if (bytesRead == 0)
                     {
                         // End of stream
@@ -152,18 +256,18 @@ public sealed class EvdevKeypadInput : IInputBackend, IKeypadInput, IDisposable
                 {
                     if (value == 1)
                     {
-                        KeyPressed?.Invoke(key);
                         lock (_gate)
                         {
+                            KeyPressed?.Invoke(key);
                             _gestures.Down(key, Environment.TickCount64);
                             _tickTimer?.Change(TickIntervalMs, TickIntervalMs);
                         }
                     }
                     else if (value == 0)
                     {
-                        KeyReleased?.Invoke(key);
                         lock (_gate)
                         {
+                            KeyReleased?.Invoke(key);
                             _gestures.Up(key, Environment.TickCount64);
                         }
                     }
@@ -178,6 +282,10 @@ public sealed class EvdevKeypadInput : IInputBackend, IKeypadInput, IDisposable
         {
             // Expected during shutdown
         }
+        finally
+        {
+            stream?.Close();
+        }
     }
 
     // Gesture clock: fires while a key is active, disarms itself once the detector is idle.
@@ -191,13 +299,23 @@ public sealed class EvdevKeypadInput : IInputBackend, IKeypadInput, IDisposable
         }
     }
 
-    /// <summary>Stops the reader thread, the gesture timer, and closes the device node.</summary>
+    /// <summary>Stops all reader threads, the gesture timer, and closes all device nodes.</summary>
     public void Dispose()
     {
         _cts.Cancel();
         _tickTimer?.Dispose();
-        _stream?.Close();
-        _readerThread?.Join();
+        
+        // Join all reader threads
+        Thread[] threads;
+        lock (_gate)
+        {
+            threads = _readerThreads.ToArray();
+        }
+        foreach (var thread in threads)
+        {
+            thread.Join();
+        }
+        
         _cts.Dispose();
     }
 }

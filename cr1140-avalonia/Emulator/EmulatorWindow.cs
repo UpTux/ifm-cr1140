@@ -11,7 +11,9 @@ using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Threading;
 using Cr1140.Avalonia.Controls;
+using Cr1140.Avalonia.Devices;
 using Cr1140.Avalonia.Input;
+using Cr1140.Avalonia.Leds;
 using Cr1140.Avalonia.Output;
 
 namespace Cr1140.Avalonia.Emulator;
@@ -25,7 +27,7 @@ public sealed class EmulatorWindow : Window
     private readonly WindowKeypadInput _keypad;
     private readonly EmulatedDevice _device;
     private readonly Rectangle _dim;
-    private readonly SolidColorBrush _statusFill;
+    private readonly List<(RgbLed Led, SolidColorBrush Fill)> _ledIndicators;
     private readonly List<Button> _keyButtons;
     private readonly DispatcherTimer _poll;
     private readonly List<(KeypadKey Key, TextBlock Caption)> _captionLabels;
@@ -102,71 +104,104 @@ public sealed class EmulatorWindow : Window
         screenPanel.Children.Add(_dim);
 
         screenBezel.Child = screenPanel;
-        root.Children.Add(screenBezel);
 
-        // KEYPAD — one physical row matching the panel: F6 F4 F2 · d-pad · F1 F3 F5.
+        // KEYPAD — mirror the device's physical key placement: a horizontal row below the
+        // screen (CR1140/CR1141, keys along the bottom) or a vertical column beside the
+        // screen (CR1102, keys down the right bezel).
+        var verticalKeys = options.SoftKeyEdge == SoftKeyEdge.Right || options.SoftKeyEdge == SoftKeyEdge.Left;
+
+        StackPanel? keypadPanel = null;
         if (options.ShowKeypad)
         {
-            var keypadRow = new StackPanel
+            keypadPanel = new StackPanel
             {
-                Orientation = Orientation.Horizontal,
+                Orientation = verticalKeys ? Orientation.Vertical : Orientation.Horizontal,
                 HorizontalAlignment = HorizontalAlignment.Center,
-                Margin = new Thickness(0, 12, 0, 0)
+                VerticalAlignment = VerticalAlignment.Center,
+                Margin = verticalKeys ? new Thickness(12, 0, 0, 0) : new Thickness(0, 12, 0, 0)
             };
 
             // The on-screen function keys mirror the device's physical silk-screen order
-            // (F6 F4 F2 · F1 F3 F5) with the d-pad cluster in the centre; each emits its fixed
-            // hardware KeypadKey, exactly like the panel. The app applies
-            // SoftKeyLayoutMap.ToLogical for the footer layout.
-            var phys = SoftKeyLayoutMap.PhysicalOrder;
-            for (int i = 0; i < 3 && i < phys.Count; i++)
+            // (6-key: F6 F4 F2 · F1 F3 F5; 8-key CR1102: F1 F2 F3 F4 · F5 F6 F7 F8) with the
+            // d-pad cluster in the centre — running left→right (horizontal) or top→bottom
+            // (vertical). Each emits its fixed hardware KeypadKey, exactly like the panel;
+            // the app applies SoftKeyLayoutMap.ToLogical for the footer layout.
+            var phys = SoftKeyLayoutMap.PhysicalOrderFor(options.FunctionKeyCount);
+            int half = phys.Count / 2; // top/left group before the d-pad, bottom/right after
+            for (int i = 0; i < half; i++)
             {
-                keypadRow.Children.Add(MakeKeyButton(phys[i], phys[i].ToString()));
+                keypadPanel.Children.Add(MakeKeyButton(phys[i], phys[i].ToString()));
             }
 
-            keypadRow.Children.Add(BuildDpad());
+            keypadPanel.Children.Add(BuildDpad());
 
-            for (int i = 3; i < 6 && i < phys.Count; i++)
+            for (int i = half; i < phys.Count; i++)
             {
-                keypadRow.Children.Add(MakeKeyButton(phys[i], phys[i].ToString()));
+                keypadPanel.Children.Add(MakeKeyButton(phys[i], phys[i].ToString()));
             }
-
-            root.Children.Add(keypadRow);
         }
 
-        // BOTTOM BAR — keyboard hint (left) and the status-LED dot (bottom-right, like the panel).
+        // Screen + key column side by side (vertical keypad) or the key row beneath the
+        // screen (horizontal keypad).
+        if (verticalKeys && keypadPanel != null)
+        {
+            var stage = new StackPanel
+            {
+                Orientation = Orientation.Horizontal,
+                HorizontalAlignment = HorizontalAlignment.Center
+            };
+            stage.Children.Add(screenBezel);
+            stage.Children.Add(keypadPanel);
+            root.Children.Add(stage);
+        }
+        else
+        {
+            root.Children.Add(screenBezel);
+            if (keypadPanel != null)
+            {
+                root.Children.Add(keypadPanel);
+            }
+        }
+
+        // BOTTOM BAR — keyboard hint (left) and per-profile LED indicators (bottom-right).
         var bottomBar = new DockPanel { Margin = new Thickness(0, 12, 0, 0) };
 
-        _statusFill = new SolidColorBrush(Color.FromRgb(0x33, 0x33, 0x33));
-        var statusCluster = new StackPanel { Orientation = Orientation.Horizontal };
-        statusCluster.Children.Add(new TextBlock
+        // Build one indicator per LED in the device profile
+        _ledIndicators = new List<(RgbLed, SolidColorBrush)>();
+        var ledCluster = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 12 };
+        foreach (var led in device.Leds)
         {
-            Text = "STATUS",
-            Foreground = new SolidColorBrush(Color.FromRgb(0xaa, 0xaa, 0xaa)),
-            VerticalAlignment = VerticalAlignment.Center,
-            Margin = new Thickness(0, 0, 6, 0)
-        });
-        statusCluster.Children.Add(new Ellipse
-        {
-            Width = 14,
-            Height = 14,
-            VerticalAlignment = VerticalAlignment.Center,
-            Fill = _statusFill
-        });
-        DockPanel.SetDock(statusCluster, Dock.Right);
-        bottomBar.Children.Add(statusCluster);
+            var indicator = new StackPanel { Orientation = Orientation.Horizontal };
+            indicator.Children.Add(new TextBlock
+            {
+                Text = led.Name,
+                Foreground = new SolidColorBrush(Color.FromRgb(0xaa, 0xaa, 0xaa)),
+                VerticalAlignment = VerticalAlignment.Center,
+                Margin = new Thickness(0, 0, 6, 0)
+            });
+            var fill = new SolidColorBrush(Color.FromRgb(0x33, 0x33, 0x33));
+            indicator.Children.Add(new Ellipse
+            {
+                Width = 14,
+                Height = 14,
+                VerticalAlignment = VerticalAlignment.Center,
+                Fill = fill
+            });
+            _ledIndicators.Add((led, fill));
+            ledCluster.Children.Add(indicator);
+        }
+        DockPanel.SetDock(ledCluster, Dock.Right);
+        bottomBar.Children.Add(ledCluster);
 
         if (options.ShowKeyboardHints)
         {
             bottomBar.Children.Add(new TextBlock
             {
-                Text = "Keyboard: F1–F6 · Arrows · Enter",
+                Text = $"Keyboard: F1–F{options.FunctionKeyCount} · Arrows · Enter",
                 Foreground = new SolidColorBrush(Color.FromRgb(0xaa, 0xaa, 0xaa)),
                 VerticalAlignment = VerticalAlignment.Center
             });
         }
-
-        root.Children.Add(bottomBar);
 
         Content = root;
 
@@ -206,20 +241,32 @@ public sealed class EmulatorWindow : Window
         // Update dim overlay from backlight
         _dim.Opacity = (1.0 - Math.Clamp(_device.BacklightPercent, 0, 100) / 100.0) * 0.9;
 
-        // Update status LED
-        var s = _device.StatusColor;
-        _statusFill.Color = (s.R == 0 && s.G == 0 && s.B == 0)
-            ? Color.FromRgb(0x33, 0x33, 0x33)
-            : Color.FromRgb(s.R, s.G, s.B);
+        // Update all profile LED indicators
+        foreach (var (led, fill) in _ledIndicators)
+        {
+            var color = _device.LedColor(led);
+            fill.Color = (color.R == 0 && color.G == 0 && color.B == 0)
+                ? Color.FromRgb(0x33, 0x33, 0x33)
+                : Color.FromRgb(color.R, color.G, color.B);
+        }
 
-        // Update keypad backlight tint
-        var k = _device.KbdColor;
-        var brush = (k.R == 0 && k.G == 0 && k.B == 0)
-            ? (IBrush)new SolidColorBrush(Color.FromRgb(0x3a, 0x3d, 0x42))
-            : new SolidColorBrush(Color.FromRgb(k.R, k.G, k.B));
+        // Apply keypad backlight tint if the profile has a KeypadBacklight-role LED
+        IBrush keypadBrush = new SolidColorBrush(Color.FromRgb(0x3a, 0x3d, 0x42));
+        foreach (var led in _device.Leds)
+        {
+            if (led.Role == LedRole.KeypadBacklight)
+            {
+                var k = _device.LedColor(led);
+                if (!(k.R == 0 && k.G == 0 && k.B == 0))
+                {
+                    keypadBrush = new SolidColorBrush(Color.FromRgb(k.R, k.G, k.B));
+                }
+                break;
+            }
+        }
         foreach (var b in _keyButtons)
         {
-            b.Background = brush;
+            b.Background = keypadBrush;
         }
 
         // Update per-key captions from the app-supplied provider (e.g. the live soft-key

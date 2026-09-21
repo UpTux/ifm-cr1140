@@ -178,6 +178,66 @@ public static class ProcFs
     }
 
     /// <summary>
+    /// Compute a Xilinx/ZynqMP System Monitor (AMS/XADC) IIO temperature in °C from the
+    /// three sysfs channel files. The IIO convention for a processed temperature is
+    /// <c>(raw + offset) × scale</c> in milli-degrees Celsius, so this returns
+    /// <c>(raw + offset) × scale / 1000</c>. Returns <see langword="null"/> if any input is
+    /// not a number.
+    /// </summary>
+    public static double? ParseIioTempC(string rawContent, string offsetContent, string scaleContent)
+    {
+        if (!int.TryParse(rawContent.Trim(), NumberStyles.Integer, CultureInfo.InvariantCulture, out var raw))
+            return null;
+        if (!double.TryParse(offsetContent.Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out var offset))
+            return null;
+        if (!double.TryParse(scaleContent.Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out var scale))
+            return null;
+        return (raw + offset) * scale / 1000.0;
+    }
+
+    /// <summary>
+    /// Read the on-chip SoC temperature in °C from a Xilinx/ZynqMP <b>System Monitor</b>
+    /// exposed via IIO — a <c>/sys/bus/iio/devices/iio:deviceN</c> whose <c>name</c> is
+    /// <c>xilinx-system-monitor</c> (also <c>xadc</c> / <c>ams</c>), from its
+    /// <c>in_temp0_{raw,offset,scale}</c> channel. Used where the SoC exposes no
+    /// <c>/sys/class/thermal</c> zone (e.g. the CR1102's ZynqMP, whose thermal class is
+    /// empty). Degrades to <see langword="null"/> when no such device/channel is present.
+    /// </summary>
+    public static double? ReadXilinxSysmonTempC()
+    {
+        var dir = FindXilinxSysmonDir();
+        if (dir is null)
+            return null;
+
+        var raw = TryRead($"{dir}/in_temp0_raw");
+        var offset = TryRead($"{dir}/in_temp0_offset");
+        var scale = TryRead($"{dir}/in_temp0_scale");
+        return raw is not null && offset is not null && scale is not null
+            ? ParseIioTempC(raw, offset, scale)
+            : null;
+    }
+
+    /// <summary>Locate the IIO device directory of the Xilinx system monitor, or <see langword="null"/>.</summary>
+    private static string? FindXilinxSysmonDir()
+    {
+        try
+        {
+            foreach (var dir in Directory.EnumerateDirectories("/sys/bus/iio/devices", "iio:device*"))
+            {
+                var name = TryRead($"{dir}/name")?.Trim();
+                if (name is "xilinx-system-monitor" or "xadc" or "ams")
+                    return dir;
+            }
+        }
+        catch
+        {
+            // No IIO subsystem (non-Linux / no sysmon) — treat as unavailable.
+        }
+
+        return null;
+    }
+
+    /// <summary>
     /// Read a whole file, returning <see langword="null"/> for any I/O failure
     /// (missing file, wrong platform, permission denied). Shared by the readers in
     /// this package.

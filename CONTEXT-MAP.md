@@ -3,7 +3,7 @@
 This is a Rust cargo workspace targeting the **ifm CR1140 / CR1141** (ecomatDisplay
 4.3″, NXP i.MX 8M Nano / aarch64), for applications that run in place of the stock
 CODESYS runtime. See [`docs/device-facts.md`](docs/device-facts.md) for hardware/OS
-ground truth.
+ground truth. The **Avalonia library** (`Cr1140.Avalonia` / `cr1140-avalonia-demo`) additionally supports the **ifm CR1102** (ecomatDisplay/10"/Touch, 1280×800 PCAP touchscreen, **ifm PDM3 platform on Xilinx Zynq UltraScale+ ZynqMP quad-core Cortex-A53 + Mali-400 GPU, Linux kernel 5.10.127** `[live ✓ 2026-09-21]`) via the `Cr1140.Avalonia.Devices` device-profile API; see [`docs/device-facts-cr1102.md`](docs/device-facts-cr1102.md) for CR1102-specific facts. The Rust workspace remains CR1140/CR1141-only.
 
 Each crate has its own bounded context. Read the relevant `CONTEXT.md` before
 working in that crate; read this map first to find it.

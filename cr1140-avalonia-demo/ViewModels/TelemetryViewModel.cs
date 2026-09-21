@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
+using Cr1140.AvaloniaDemo;
 using System.Collections.ObjectModel;
 using System.Globalization;
 using Avalonia.Threading;
@@ -40,7 +41,9 @@ public sealed class TelemetryViewModel : ViewModelBase
     private const string Dash = "—";
     private const double ScrollStep = 96;
 
-    private readonly SystemTelemetry _telemetry = new();
+    private readonly SystemTelemetry _telemetry = new(
+        Program.Profile.SocThermalZone,
+        Program.Profile.TemperatureViaDbus ? new IfmSystemTemperatures() : null);
     private readonly DispatcherTimer _timer;
 
     private readonly TelemetryRow _can = new("CAN can0", Dash);

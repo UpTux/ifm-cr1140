@@ -19,7 +19,7 @@ public partial class App : Application
 
     public override void OnFrameworkInitializationCompleted()
     {
-        var vm = new MainViewModel(Program.Keypad);
+        var vm = new MainViewModel(Program.Keypad, Program.Profile);
         var mainView = new MainView { DataContext = vm };
 
         switch (ApplicationLifetime)

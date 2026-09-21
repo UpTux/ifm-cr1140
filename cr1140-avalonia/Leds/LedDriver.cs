@@ -1,10 +1,11 @@
 // SPDX-License-Identifier: GPL-3.0-only
 using System.Diagnostics;
+using Cr1140.Avalonia.Devices;
 
 namespace Cr1140.Avalonia.Leds;
 
 /// <summary>
-/// Drives the RGB keypad button backlight from a base color and an animation
+/// Drives an <see cref="RgbLed"/> (the keypad button backlight by default) from a base color and an animation
 /// <see cref="LedMode"/>. Call <see cref="Tick"/> once per frame; it samples the mode's
 /// brightness curve, scales the color, and writes the three sysfs channels only when
 /// the resulting value changes (so a steady color costs nothing after the first write).
@@ -22,6 +23,19 @@ public sealed class LedDriver
     private LedMode _mode = LedMode.Solid;
     private long _modeStart = Stopwatch.GetTimestamp();
     private (byte R, byte G, byte B)? _last;
+    private readonly RgbLed? _led;
+
+    /// <summary>Create a driver for the CR1140/CR1141 keypad button backlight (legacy default).</summary>
+    public LedDriver()
+    {
+    }
+
+    /// <summary>Create a driver for a specific <see cref="RgbLed"/> (e.g. a device-profile LED).</summary>
+    /// <param name="led">The RGB LED to drive.</param>
+    public LedDriver(RgbLed led)
+    {
+        _led = led;
+    }
 
     /// <summary>The current base color (before the mode's brightness curve is applied).</summary>
     public (byte R, byte G, byte B) Color => _color;
@@ -56,7 +70,10 @@ public sealed class LedDriver
             return true;
         }
 
-        if (!LedSysfs.SetKbdBacklight(target.R, target.G, target.B))
+        var ok = _led is null
+            ? LedSysfs.SetKbdBacklight(target.R, target.G, target.B)
+            : LedSysfs.SetRgb(_led, target.R, target.G, target.B);
+        if (!ok)
         {
             return false;
         }

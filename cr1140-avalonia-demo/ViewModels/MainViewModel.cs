@@ -3,6 +3,9 @@ using System.Collections.Generic;
 using Avalonia.Threading;
 using Cr1140.Avalonia.Input;
 using Cr1140.Avalonia.Controls;
+using Cr1140.Avalonia.Devices;
+using Avalonia.Controls;
+using Avalonia.Layout;
 
 namespace Cr1140.AvaloniaDemo.ViewModels;
 
@@ -19,14 +22,30 @@ public sealed class MainViewModel : ViewModelBase
     private object? _currentContent;
     private SoftKeyViewModel[] _softKeys;
     private SoftKeyFooterLayout _footerLayout = SoftKeyFooterLayout.Physical;
+    private readonly int _functionKeyCount;
+    private readonly Dock _footerDock;
+    private readonly Orientation _footerOrientation;
 
-    public MainViewModel(IKeypadInput keypad)
+    public MainViewModel(IKeypadInput keypad, DeviceProfile profile)
     {
         _keypad = keypad;
         _title = "Baler";
         _currentContent = null;
+        _functionKeyCount = profile.FunctionKeyCount;
 
-        // Create 6 empty soft keys initially
+        // Dock the soft-key footer on the edge the device's physical keys sit on: the
+        // CR1140/CR1141 keys run along the bottom (horizontal strip); the CR1102's eight
+        // keys are a vertical column on the right, so the footer docks right and each label
+        // lines up with its button.
+        (_footerDock, _footerOrientation) = profile.SoftKeyEdge switch
+        {
+            SoftKeyEdge.Top => (Dock.Top, Orientation.Horizontal),
+            SoftKeyEdge.Left => (Dock.Left, Orientation.Vertical),
+            SoftKeyEdge.Right => (Dock.Right, Orientation.Vertical),
+            _ => (Dock.Bottom, Orientation.Horizontal),
+        };
+
+        // Eight soft-key slots (F1..F8); the footer renders only FunctionKeyCount of them.
         _softKeys = new[]
         {
             new SoftKeyViewModel("F1", ""),
@@ -34,7 +53,9 @@ public sealed class MainViewModel : ViewModelBase
             new SoftKeyViewModel("F3", ""),
             new SoftKeyViewModel("F4", ""),
             new SoftKeyViewModel("F5", ""),
-            new SoftKeyViewModel("F6", "")
+            new SoftKeyViewModel("F6", ""),
+            new SoftKeyViewModel("F7", ""),
+            new SoftKeyViewModel("F8", "")
         };
 
         _nav = new NavigationController(this);
@@ -68,6 +89,15 @@ public sealed class MainViewModel : ViewModelBase
 
     public IReadOnlyList<SoftKeyViewModel> SoftKeys => _softKeys;
 
+    /// <summary>The number of function keys the footer renders (6 for CR1140/CR1141, 8 for CR1102).</summary>
+    public int FunctionKeyCount => _functionKeyCount;
+
+    /// <summary>The panel edge the soft-key footer docks to (bottom for CR1140/CR1141, right for CR1102).</summary>
+    public Dock FooterDock => _footerDock;
+
+    /// <summary>Whether the footer is a horizontal strip or a vertical column, matching the keypad edge.</summary>
+    public Orientation FooterOrientation => _footerOrientation;
+
     public SoftKeyFooterLayout FooterLayout
     {
         get => _footerLayout;
@@ -87,7 +117,7 @@ public sealed class MainViewModel : ViewModelBase
         // Remap the hardware key to the logical soft-key for the current footer
         // layout (identity in Physical; physical-position based in Natural), then
         // dispatch to the UI thread.
-        var logical = SoftKeyLayoutMap.ToLogical(key, _footerLayout);
+        var logical = SoftKeyLayoutMap.ToLogical(key, _footerLayout, _functionKeyCount);
         Dispatcher.UIThread.Post(() => _nav.Handle(logical));
     }
 
@@ -102,7 +132,7 @@ public sealed class MainViewModel : ViewModelBase
     /// </summary>
     public string? CaptionForKey(KeypadKey hardware)
     {
-        var logical = SoftKeyLayoutMap.ToLogical(hardware, _footerLayout);
+        var logical = SoftKeyLayoutMap.ToLogical(hardware, _footerLayout, _functionKeyCount);
         int idx = (int)logical;
         if (idx < 0 || idx >= _softKeys.Length)
             return null;
@@ -119,8 +149,8 @@ public sealed class MainViewModel : ViewModelBase
         Title = title;
         CurrentContent = content;
 
-        // Update the soft key labels (we keep the same 6 instances for binding stability)
-        for (int i = 0; i < 6; i++)
+        // Update the soft key labels (same 8 instances kept for binding stability).
+        for (int i = 0; i < _softKeys.Length; i++)
         {
             _softKeys[i].Label = softKeys[i].Label;
         }

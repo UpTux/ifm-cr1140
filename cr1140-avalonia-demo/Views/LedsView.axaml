@@ -17,7 +17,7 @@
 
     <!-- Instruction -->
     <TextBlock Grid.Row="0"
-               Text="F1 Status colour  ·  F2 Keypad colour  ·  F3 Animation mode  ·  F6 Back"
+               Text="F1 LED A colour  ·  F2 LED B colour  ·  F3 Animation  ·  F6 Back"
                FontSize="15"
                Foreground="#888888"
                HorizontalAlignment="Center"
@@ -34,7 +34,7 @@
               Margin="4"
               Padding="18,14">
         <StackPanel>
-          <TextBlock Text="STATUS LED"
+          <TextBlock Text="{Binding LedAName}"
                      FontSize="13"
                      FontWeight="SemiBold"
                      Foreground="#666666"/>
@@ -49,7 +49,7 @@
                      FontWeight="Bold"
                      Foreground="#e0e0e0"
                      HorizontalAlignment="Center"/>
-          <TextBlock Text="binary RGB · *:status"
+          <TextBlock Text="{Binding LedASubtitle}"
                      FontSize="12"
                      Foreground="#777777"
                      HorizontalAlignment="Center"
@@ -65,7 +65,7 @@
               Margin="4"
               Padding="18,14">
         <StackPanel>
-          <TextBlock Text="KEYPAD BACKLIGHT"
+          <TextBlock Text="{Binding LedBName}"
                      FontSize="13"
                      FontWeight="SemiBold"
                      Foreground="#666666"/>
@@ -80,7 +80,7 @@
                      FontWeight="Bold"
                      Foreground="#e0e0e0"
                      HorizontalAlignment="Center"/>
-          <TextBlock Text="PWM RGB · *:kbd_backlight"
+          <TextBlock Text="{Binding LedBSubtitle}"
                      FontSize="12"
                      Foreground="#777777"
                      HorizontalAlignment="Center"

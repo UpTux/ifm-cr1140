@@ -124,6 +124,8 @@ public sealed class WindowKeypadInput : IKeypadInput, IDisposable
             Key.F4 => KeypadKey.F4,
             Key.F5 => KeypadKey.F5,
             Key.F6 => KeypadKey.F6,
+            Key.F7 => KeypadKey.F7,
+            Key.F8 => KeypadKey.F8,
             Key.Up => KeypadKey.Up,
             Key.Down => KeypadKey.Down,
             Key.Left => KeypadKey.Left,
