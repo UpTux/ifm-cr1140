@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
 using System.Globalization;
+using Cr1140.Avalonia.Devices;
 
 namespace Cr1140.Avalonia.Leds;
 
@@ -100,6 +101,37 @@ public static class LedSysfs
     /// </summary>
     public static bool SetKbdBacklight(byte r, byte g, byte b) =>
         Set(Name(Led.KbdRed), r) && Set(Name(Led.KbdGreen), g) && Set(Name(Led.KbdBlue), b);
+
+    /// <summary>
+    /// Set an <see cref="RgbLed"/> from a 0–255 colour, scaling each channel onto the LED's
+    /// hardware range: binary LEDs (<see cref="RgbLed.Max"/> == 1) turn a channel on for any
+    /// non-zero value; PWM LEDs write the channel value directly. Writes stop at the first
+    /// channel that fails.
+    /// </summary>
+    /// <returns><see langword="true"/> if all three channels were written; <see langword="false"/>
+    /// if any node is missing or unwritable.</returns>
+    public static bool SetRgb(RgbLed led, byte r, byte g, byte b)
+    {
+        uint Ch(byte v) => led.Max <= 1 ? (v > 0 ? 1u : 0u) : v;
+        return Set(led.RedLeaf, Ch(r)) && Set(led.GreenLeaf, Ch(g)) && Set(led.BlueLeaf, Ch(b));
+    }
+
+    /// <summary>
+    /// Read an <see cref="RgbLed"/>'s current colour as 0–255 channels, or <see langword="null"/>
+    /// if none of its channels are readable (off-device / missing nodes). Binary LEDs report a lit
+    /// channel as <c>255</c>; PWM LEDs report the raw channel value clamped to 255.
+    /// </summary>
+    public static (byte R, byte G, byte B)? ReadRgb(RgbLed led)
+    {
+        var r = Read(led.RedLeaf);
+        var g = Read(led.GreenLeaf);
+        var b = Read(led.BlueLeaf);
+        if (r is null && g is null && b is null)
+            return null;
+
+        byte Ch(uint? v) => led.Max <= 1 ? (byte)((v ?? 0) > 0 ? 255 : 0) : (byte)Math.Min(v ?? 0u, 255u);
+        return (Ch(r), Ch(g), Ch(b));
+    }
 
     /// <summary>
     /// The available LED leaf names under <c>/sys/class/leds/</c> (sorted), or

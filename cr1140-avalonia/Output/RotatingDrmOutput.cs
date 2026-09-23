@@ -17,13 +17,20 @@ namespace Cr1140.Avalonia.Output;
 /// <remarks>
 /// This is the DRM sibling of <see cref="RotatingFbdevOutput"/>. Where the fbdev backend
 /// <c>mmap</c>s a single <c>/dev/fb0</c> surface (which can tear during large redraws), this
-/// backend opens the DRM primary node (<c>/dev/dri/card0</c>), modesets the connected panel's
-/// current mode, allocates <b>two</b> DUMB scanout buffers, and — after Skia renders a full
-/// frame into a private logical back buffer — rotate-blits into the buffer that is <em>not</em>
-/// being scanned out via <see cref="FramebufferRotator"/> and issues a
+/// backend auto-detects the connected KMS display card (scanning <c>/dev/dri/card*</c>) unless
+/// an explicit <c>card</c> is given, modesets the connected panel's current mode,
+/// allocates <b>two</b> DUMB scanout buffers, and — after Skia renders a full frame into a
+/// private logical back buffer — rotate-blits into the buffer that is <em>not</em> being
+/// scanned out via <see cref="FramebufferRotator"/> and issues a
 /// <c>DRM_IOCTL_MODE_PAGE_FLIP</c>, waiting for the flip-complete event. The result is a
-/// vsync-throttled, tear-free present that keeps CPU (Skia) rendering — the i.MX 8M Nano has
-/// no working GL driver, so Avalonia's GL-based <c>DrmOutput</c> is not usable here.
+/// vsync-throttled, tear-free present that keeps CPU (Skia) rendering. The i.MX 8M Nano
+/// (CR1140/CR1141) has no working GL driver, so Avalonia's GL-based <c>DrmOutput</c> is not
+/// usable there. The CR1102 exposes a Mali-400 GPU (lima render node + Mesa), but this backend
+/// still uses software Skia; GPU-accelerated Avalonia rendering on the CR1102 is unverified.
+///
+/// <para>The CR1102 has two DRM cards: <c>/dev/dri/card0</c> (lima, render-only, no connectors)
+/// and <c>/dev/dri/card1</c> (ifm_dc, the display controller). Auto-detection selects
+/// <c>card1</c> on the CR1102 and <c>card0</c> on the CR1140/CR1141.</para>
 ///
 /// <para>Reports a <em>logical</em> (rotated) size to Avalonia — swapping width/height for the
 /// 90°/270° cases — so layout, hit-testing and DPI stay correct for the orientation. Pass an
@@ -100,7 +107,7 @@ public sealed class RotatingDrmOutput : IOutputBackend, IFramebufferPlatformSurf
     public PixelSize PixelSize => new(_logicalWidth, _logicalHeight);
 
     /// <summary>Open a DRM device and prepare it for rotated, double-buffered output.</summary>
-    /// <param name="card">DRM primary node, or null for <c>/dev/dri/card0</c>.</param>
+/// <param name="card">DRM primary node, or null to auto-detect the connected KMS display card by scanning <c>/dev/dri/card*</c>.</param>
     /// <param name="rotation">Clockwise rotation to apply to every frame.</param>
     /// <param name="scaling">Initial layout scale factor.</param>
     /// <param name="stats">Optional recorder fed one <c>FrameSample</c> per presented frame; <c>null</c> disables instrumentation.</param>
@@ -110,10 +117,18 @@ public sealed class RotatingDrmOutput : IOutputBackend, IFramebufferPlatformSurf
         _stats = stats;
         Scaling = scaling;
 
-        var path = card ?? "/dev/dri/card0";
-        _fd = open(path, O_RDWR | O_CLOEXEC, 0);
-        if (_fd <= 0)
-            throw new InvalidOperationException($"Unable to open DRM device '{path}': errno {Marshal.GetLastWin32Error()}");
+        if (card != null)
+        {
+            // Explicit card path: open exactly that, throw on failure.
+            _fd = open(card, O_RDWR | O_CLOEXEC, 0);
+            if (_fd <= 0)
+                throw new InvalidOperationException($"Unable to open DRM device '{card}': errno {Marshal.GetLastWin32Error()}");
+        }
+        else
+        {
+            // Auto-detect: scan /dev/dri/card* for a usable KMS display (connected connector with modes).
+            _fd = DetectKmsCard();
+        }
 
         try
         {
@@ -124,6 +139,57 @@ public sealed class RotatingDrmOutput : IOutputBackend, IFramebufferPlatformSurf
             Dispose();
             throw;
         }
+    }
+
+    private unsafe int DetectKmsCard()
+    {
+        var diagnostics = new List<string>();
+
+        for (int i = 0; i <= 7; i++)
+        {
+            var path = $"/dev/dri/card{i}";
+            int fd = open(path, O_RDWR | O_CLOEXEC, 0);
+            if (fd <= 0)
+            {
+                // File doesn't exist or can't be opened; skip silently unless it's a real open failure.
+                int err = Marshal.GetLastWin32Error();
+                if (err != 2) // ENOENT = 2; don't report missing nodes, only permission/other errors.
+                    diagnostics.Add($"{path} (open failed: errno {err})");
+                continue;
+            }
+
+            // Probe with the SAME proven, read-only GetResources()/GetConnector() the ctor uses
+            // (they operate on _fd). These ioctls do not require DRM master, so probing does not
+            // disturb any running compositor. A render-only GPU node (e.g. lima on the CR1102's
+            // card0) throws from GETRESOURCES and is skipped; the display card (card1) succeeds.
+            _fd = fd;
+            string why;
+            try
+            {
+                var (_, connectors) = GetResources();
+                foreach (var connId in connectors)
+                {
+                    var (connection, _, modes, _) = GetConnector(connId);
+                    if (connection == DrmModeConnected && modes.Length > 0)
+                        return fd; // Keep this fd; _fd is already set for Init().
+                }
+                why = "no connected connector with modes";
+            }
+            catch (Exception ex)
+            {
+                why = ex.Message;
+            }
+
+            close(fd);
+            _fd = 0;
+            diagnostics.Add($"{path} ({why})");
+        }
+
+        if (diagnostics.Count == 0)
+            throw new InvalidOperationException("No DRM cards found in /dev/dri/");
+
+        var details = string.Join(", ", diagnostics);
+        throw new InvalidOperationException($"No DRM card with a connected connector found; tried: {details}");
     }
 
     private unsafe void Init()

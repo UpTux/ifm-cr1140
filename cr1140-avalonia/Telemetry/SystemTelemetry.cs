@@ -23,7 +23,8 @@ public sealed class SystemTelemetry
     public const uint DefaultSocThermalZone = 0;
 
     private readonly CpuSampler _cpu = new();
-    private readonly uint _socZone;
+    private readonly uint? _socZone;
+    private readonly IfmSystemTemperatures? _ifmTemps;
 
     /// <summary>New collector reading the default SoC thermal zone (<see cref="DefaultSocThermalZone"/>).</summary>
     public SystemTelemetry()
@@ -34,8 +35,27 @@ public sealed class SystemTelemetry
     /// <summary>New collector reading a specific thermal zone for the SoC temperature.</summary>
     /// <param name="socThermalZone">The <c>N</c> in <c>/sys/class/thermal/thermal_zoneN</c>.</param>
     public SystemTelemetry(uint socThermalZone)
+        : this((uint?)socThermalZone)
+    {
+    }
+
+    /// <summary>
+    /// New collector for the SoC and board temperatures. SoC temperature comes from
+    /// <paramref name="ifmTemperatures"/> (<c>com.ifm.Io.Temperature</c>, the CR1102's
+    /// <c>rCore0</c>) when supplied; otherwise from the given SoC thermal zone, or — when
+    /// <paramref name="socThermalZone"/> is <see langword="null"/> — the Xilinx/ZynqMP System
+    /// Monitor via IIO (<see cref="ProcFs.ReadXilinxSysmonTempC"/>). Board temperature comes
+    /// from <paramref name="ifmTemperatures"/> (<c>rBoard</c>) when supplied, else an
+    /// <c>lm75</c> hwmon sensor (<see cref="DeviceInfo.ReadBoardTempC"/>). The CR1102 passes an
+    /// <see cref="IfmSystemTemperatures"/> (its ZynqMP has no thermal-zone/hwmon node); the
+    /// CR1140/CR1141 pass none and use thermal zone 0 + hwmon.
+    /// </summary>
+    /// <param name="socThermalZone">The <c>N</c> in <c>/sys/class/thermal/thermal_zoneN</c>, or <see langword="null"/> for no SoC thermal zone.</param>
+    /// <param name="ifmTemperatures">The <c>com.ifm.Io.Temperature</c> reader (CR1102), or <see langword="null"/> to use thermal-zone/hwmon/IIO sources.</param>
+    public SystemTelemetry(uint? socThermalZone, IfmSystemTemperatures? ifmTemperatures = null)
     {
         _socZone = socThermalZone;
+        _ifmTemps = ifmTemperatures;
     }
 
     /// <summary>
@@ -47,8 +67,8 @@ public sealed class SystemTelemetry
         return new TelemetrySnapshot(
             cpuPercent: _cpu.Sample(),
             memory: ProcFs.ReadMeminfo(),
-            socTempC: ProcFs.ReadTempC(_socZone),
-            boardTempC: DeviceInfo.ReadBoardTempC(),
+            socTempC: (double?)_ifmTemps?.Core0() ?? (_socZone is { } zone ? ProcFs.ReadTempC(zone) : ProcFs.ReadXilinxSysmonTempC()),
+            boardTempC: (double?)_ifmTemps?.Board() ?? DeviceInfo.ReadBoardTempC(),
             uptimeSeconds: ProcFs.ReadUptime(),
             load1: ProcFs.ReadLoadavg());
     }

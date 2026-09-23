@@ -229,7 +229,9 @@ public sealed class NavigationController
             new SoftKeyViewModel("F3", labels[2]),
             new SoftKeyViewModel("F4", labels[3]),
             new SoftKeyViewModel("F5", labels[4]),
-            new SoftKeyViewModel("F6", labels[5])
+            new SoftKeyViewModel("F6", labels[5]),
+            new SoftKeyViewModel("F7", ""),
+            new SoftKeyViewModel("F8", "")
         };
     }
 

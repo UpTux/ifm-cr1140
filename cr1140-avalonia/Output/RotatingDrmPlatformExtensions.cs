@@ -20,7 +20,7 @@ public static class RotatingDrmPlatformExtensions
     /// <param name="builder">The configured app builder.</param>
     /// <param name="args">Process arguments forwarded to the lifetime.</param>
     /// <param name="rotation">Clockwise rotation to apply to the display.</param>
-    /// <param name="card">DRM primary node, or null for <c>/dev/dri/card0</c>.</param>
+    /// <param name="card">DRM primary node, or null to auto-detect the connected KMS display card by scanning <c>/dev/dri/card*</c>.</param>
     /// <param name="scaling">Layout scale factor.</param>
     /// <param name="stats">Optional performance recorder.</param>
     /// <param name="inputBackend">Optional input backend (e.g. <c>EvdevKeypadInput</c>).</param>
