@@ -2,7 +2,7 @@ using System.Buffers.Binary;
 using System.Runtime.InteropServices;
 using Cr1140.Avalonia.Diagnostics;
 using Avalonia;
-using Avalonia.Controls.Platform.Surfaces;
+using Avalonia.Platform.Surfaces;
 using Avalonia.LinuxFramebuffer.Output;
 using Avalonia.Platform;
 
@@ -247,6 +247,7 @@ public sealed class RotatingDrmOutput : IOutputBackend, IFramebufferPlatformSurf
                 _logicalStrideBytes,
                 dpi,
                 _format,
+                AlphaFormat.Premul,
                 () =>
                 {
                     _stats?.BeginPresent();

@@ -2,7 +2,7 @@
 
 ## Responsibility
 
-A .NET/Avalonia 11.3.20 **reference application** for the CR1140/CR1141, demonstrating
+A .NET/Avalonia 12.1.3 **reference application** for the CR1140/CR1141, demonstrating
 how to build an operator-panel UI in C# that renders directly to the Linux framebuffer
 (`/dev/fb0`) via Avalonia's LinuxFramebuffer backend (software Skia) and captures
 keypad input via the **`Cr1140.Avalonia` package** (a reusable evdev backend; see
@@ -46,7 +46,7 @@ beyond the minimum for input and font.
 
 **Device selector**: The demo accepts `--device=cr1102|cr1140|cr1141` (or `CR1140_DEVICE` env var, default `cr1140`) to select the **device profile** for both the emulator and on-device operation. **On the desktop emulator**, the profile controls the window's panel size (1280×800 for CR1102, 800×480 for CR1140/CR1141), function-key count (8 for CR1102, 6 for others), and LED indicators (CR1102 = Primary/Secondary dots; CR1140/CR1141 = Status dot + keypad tint) via `EmulatorOptions.ForDevice(profile)`. **On-device** (Linux, no emulator flag), the profile drives backlight node/max (CR1102 = `a00e0400.panel`/255 `[live ✓ 2026-09-21]`), telemetry thermal zone (null for CR1102 `[live ✓ 2026-09-21]`), keypad auto-discovery (CR1102's `"PDM3 virtual keyboard"` uinput nodes `[live ✓ 2026-09-21]`), and touch composition (CR1102 composes Avalonia's `EvDevBackend` for touch + `EvdevKeypadInput` via `CompositeInputBackend` `[live ✓ 2026-09-21]`). The demo was **verified on a physical CR1102 (2026-09-21)**: renders 1280×800 crisp fbdev/DRM output, DRM auto-detects the ifm_dc card1 (skips render-only lima card0), touch and keypad backends initialize, backlight/LED writes work.
 
-**Desktop emulator**: Run the same demo in a device-bezel window on a dev host (macOS / Windows / Linux desktop) with `just run-emulator` or `dotnet run --project cr1140-avalonia-demo`. The physical keyboard (F1–F8, arrow keys, Enter/Return) or the on-screen keypad drives input. Each on-screen F-key is captioned with the soft-key it currently triggers (via `MainViewModel.CaptionForKey`), so the captions follow the footer layout as it toggles. The status LED (live dot), keypad backlight (on-screen-button tint), and screen dimming (overlay) render live from the real `Cr1140.Avalonia.Leds` / `Display` API writes (the same code writes to a temporary sysfs tree that the bezel polls). System telemetry (`SystemTelemetry`/`ProcFs`/`DeviceInfo`) reads the host (shows `?` on macOS, host stats on Linux desktops) — deliberately NOT redirected, since the emulator emulates the actuation surfaces (display, keypad, status LED, keypad backlight), not system state. The consuming app adds `Avalonia.Desktop` (the emulator package uses only core Avalonia); `Cr1140.AvaloniaDemo.csproj` has `<PackageReference Include="Avalonia.Desktop" Version="11.3.20" />`.
+**Desktop emulator**: Run the same demo in a device-bezel window on a dev host (macOS / Windows / Linux desktop) with `just run-emulator` or `dotnet run --project cr1140-avalonia-demo`. The physical keyboard (F1–F8, arrow keys, Enter/Return) or the on-screen keypad drives input. Each on-screen F-key is captioned with the soft-key it currently triggers (via `MainViewModel.CaptionForKey`), so the captions follow the footer layout as it toggles. The status LED (live dot), keypad backlight (on-screen-button tint), and screen dimming (overlay) render live from the real `Cr1140.Avalonia.Leds` / `Display` API writes (the same code writes to a temporary sysfs tree that the bezel polls). System telemetry (`SystemTelemetry`/`ProcFs`/`DeviceInfo`) reads the host (shows `?` on macOS, host stats on Linux desktops) — deliberately NOT redirected, since the emulator emulates the actuation surfaces (display, keypad, status LED, keypad backlight), not system state. The consuming app adds `Avalonia.Desktop` (the emulator package uses only core Avalonia); `Cr1140.AvaloniaDemo.csproj` has `<PackageReference Include="Avalonia.Desktop" Version="12.1.3" />`.
 
 ## Glossary
 
@@ -62,7 +62,7 @@ beyond the minimum for input and font.
 
 ## Conventions / decisions
 
-- **Avalonia 11.3.20, .NET 10**: version is pinned; `<TargetFramework>net10.0</TargetFramework>`.
+- **Avalonia 12.1.3, .NET 10**: version is pinned; `<TargetFramework>net10.0</TargetFramework>`.
 - **Software Skia only**: no GL (the i.MX 8M Nano has no usable GL driver). Both output backends render with CPU Skia — the tear-free `RotatingDrmOutput` (DRM/KMS DUMB double-buffer + page-flip, **default**) and `RotatingFbdevOutput` (fbdev, opt-in via `--fbdev`). Avalonia's GL-based `DrmOutput` is deliberately unused. On-device A/B (identical build, idle Menu) showed both at ~4% of one core and ~90 MB RSS, so DRM is default for its tear-free output at no measurable cost.
 - **Custom evdev input backend**: Avalonia's stock LinuxFramebuffer input is touch/pointer only. This SKU is keypad-only (no touch), so `EvdevKeypadInput` polls `/dev/input/event1` and raises `KeyPressed` events. The 24-byte `input_event` layout is verified on-device (`sizeof(struct input_event)` on aarch64 glibc 2.35).
 - **Cross-published from macOS**: `just publish-avalonia` runs `dotnet publish` on macOS, targeting `linux-arm64`. NativeAOT is skipped (requires a Linux builder; standard self-contained publish is sufficient for this demo).

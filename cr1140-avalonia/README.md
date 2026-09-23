@@ -15,8 +15,8 @@ dotnet add package Cr1140.Avalonia
 ```
 
 **Dependencies** (automatically resolved):
-- `Avalonia` 11.3.20
-- `Avalonia.LinuxFramebuffer` 11.3.20
+- `Avalonia` 12.1.3
+- `Avalonia.LinuxFramebuffer` 12.1.3
 
 ## Requirements
 

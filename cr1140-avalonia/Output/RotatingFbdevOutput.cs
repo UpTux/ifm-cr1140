@@ -1,7 +1,7 @@
 using System.Runtime.InteropServices;
 using Cr1140.Avalonia.Diagnostics;
 using Avalonia;
-using Avalonia.Controls.Platform.Surfaces;
+using Avalonia.Platform.Surfaces;
 using Avalonia.LinuxFramebuffer.Output;
 using Avalonia.Platform;
 
@@ -151,6 +151,7 @@ public sealed class RotatingFbdevOutput : IOutputBackend, IFramebufferPlatformSu
                 _logicalStrideBytes,
                 dpi,
                 _format,
+                _format == PixelFormat.Rgb565 ? AlphaFormat.Opaque : AlphaFormat.Premul,
                 () =>
                 {
                     _stats?.BeginPresent();

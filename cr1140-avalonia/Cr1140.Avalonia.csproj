@@ -13,7 +13,7 @@
   <PropertyGroup>
     <IsPackable>true</IsPackable>
     <PackageId>Cr1140.Avalonia</PackageId>
-    <Version>0.13.0</Version>
+    <Version>0.14.0</Version>
     <Authors>Patrick Dahlke</Authors>
     <Company>UpTux UG (haftungsbeschränkt)</Company>
     <Product>Cr1140.Avalonia</Product>
@@ -26,7 +26,7 @@
     <RepositoryType>git</RepositoryType>
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <PackageTags>cr1140;cr1141;cr1102;ifm;ecomatdisplay;avalonia;linuxframebuffer;fbdev;drm;kms;evdev;keypad;gestures;softkey;led;leds;backlight;brightness;display;telemetry;metrics;procfs;embedded;aarch64;imx8mn;perf;overlay;fps;diagnostics;hud;watchdog;systemd;sdnotify;liveness;emulator;desktop;deviceprofile</PackageTags>
-    <PackageReleaseNotes>0.13.0 — Add CR1102 (10" 1280×800 PCAP touchscreen + keypad) device support and a new device-profile abstraction. New namespace Cr1140.Avalonia.Devices with DeviceProfile record (hardware profile: panel dimensions, input capabilities, sysfs/evdev node hints) and DeviceProfiles static class (built-in Cr1140 / Cr1141 / Cr1102 profiles + ByName resolver). EmulatorOptions.ForDevice and EvdevKeypadInput.ForDevice factory methods consume profiles. Output backends (RotatingFbdevOutput / RotatingDrmOutput) are resolution-agnostic: they read the panel mode at runtime, so the 1280×800 CR1102 panel works without library changes. Demo supports --device cr1102|cr1140|cr1141 and CR1140_DEVICE env var. Note: CR1102 low-level sysfs/evdev specifics (keypad device path, backlight max_brightness, thermal zone) are pending on-device confirmation; the datasheet-verified resolution (1280×800) and touch capability are accurate. KeypadKey now covers F1–F8 (F7/F8 added for 8-key SKUs such as the CR1102); the emulator renders the profile's function-key count.</PackageReleaseNotes>
+    <PackageReleaseNotes>0.14.0 — Upgrade to Avalonia 12 (12.1.3), from Avalonia 11.3.20. Migrates the custom software output backends (RotatingFbdevOutput / RotatingDrmOutput) to Avalonia 12's platform render-surface API: IFramebufferPlatformSurface / IFramebufferRenderTarget moved to the Avalonia.Platform.Surfaces namespace, and LockedFramebuffer now carries an AlphaFormat (Opaque for RGB565, Premul for 32-bpp XRGB8888). This package's own public API is unchanged — the input backends, SoftKeyFooter control, LED/backlight control, system telemetry, perf overlay, device profiles and desktop emulator are all identical. Requires Avalonia 12; consumers must move their Avalonia package references to 12.x (Avalonia 11 is no longer supported). The i.MX 8M Nano still has no usable GL driver, so both output backends remain software Skia and Avalonia's GL-based stock DrmOutput stays unused.</PackageReleaseNotes>
     <IncludeSymbols>true</IncludeSymbols>
     <SymbolPackageFormat>snupkg</SymbolPackageFormat>
     <PublishRepositoryUrl>true</PublishRepositoryUrl>
@@ -34,11 +34,39 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="Avalonia" Version="11.3.20" />
-    <PackageReference Include="Avalonia.LinuxFramebuffer" Version="11.3.20" />
+    <PackageReference Include="Avalonia" Version="12.1.3" />
+    <PackageReference Include="Avalonia.LinuxFramebuffer" Version="12.1.3" />
   </ItemGroup>
 
   <ItemGroup>
     <None Include="README.md" Pack="true" PackagePath="\" />
   </ItemGroup>
+
+  <!--
+    Avalonia 12 marks IPlatformRenderSurface (the base of IOutputBackend /
+    IFramebufferPlatformSurface) [PrivateApi]: its *reference* assembly carries an
+    internal-abstract "not implementable by user code" poison member that blocks external
+    assemblies from implementing these interfaces at compile time. Our custom software
+    output backends (RotatingFbdevOutput / RotatingDrmOutput) legitimately implement
+    IOutputBackend — the i.MX 8M Nano has no GL driver, so Avalonia's GL-only stock DrmOutput
+    is unusable and the box ships no software DRM output. The *runtime* (lib) assembly has no
+    poison member and Avalonia's own FbdevOutput implements the very same interfaces, so
+    binding CoreCompile against the impl assembly is sound: same assembly identity, identical
+    emitted metadata reference, and the type resolves against lib Avalonia.Base at runtime.
+    Only this library recompiles the backends; consumers passing a backend to StartLinuxDirect
+    never do, so this is confined to our build.
+  -->
+  <Target Name="_CompileAvaloniaBaseAgainstImplementationAssembly" BeforeTargets="CoreCompile">
+    <ItemGroup>
+      <_AvaloniaBaseRefAssembly Include="@(ReferencePathWithRefAssemblies)"
+          Condition="'%(FileName)' == 'Avalonia.Base' And $([System.String]::Copy('%(Identity)').Replace('\','/').Contains('/ref/'))" />
+    </ItemGroup>
+    <Message Importance="high" Text="Cr1140.Avalonia: rebinding Avalonia.Base compile ref -> impl: @(_AvaloniaBaseRefAssembly)" Condition="'@(_AvaloniaBaseRefAssembly)' != ''" />
+    <ItemGroup Condition="'@(_AvaloniaBaseRefAssembly)' != ''">
+      <ReferencePath Remove="@(_AvaloniaBaseRefAssembly)" />
+      <ReferencePath Include="@(_AvaloniaBaseRefAssembly->Replace('\ref\','\lib\')->Replace('/ref/','/lib/'))" />
+      <ReferencePathWithRefAssemblies Remove="@(_AvaloniaBaseRefAssembly)" />
+      <ReferencePathWithRefAssemblies Include="@(_AvaloniaBaseRefAssembly->Replace('\ref\','\lib\')->Replace('/ref/','/lib/'))" />
+    </ItemGroup>
+  </Target>
 </Project>

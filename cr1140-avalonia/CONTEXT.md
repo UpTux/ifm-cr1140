@@ -145,7 +145,7 @@ Avalonia's built-in **LinuxFramebuffer input** (`Avalonia.LinuxFramebuffer.Input
 
 The CR1140/CR1141 is available as a **keypad-only SKU** (no touchscreen hardware), so a headless-framebuffer Avalonia app cannot receive input using the stock platform. This library provides the missing piece: a custom `IInputBackend` that directly polls the keypad evdev node and exposes a typed event.
 
-The library targets **Avalonia 11.3.20** and **.NET 8.0** (matching the reference demo's platform).
+The library targets **Avalonia 12.1.3** and **.NET 8.0** (matching the reference demo's platform).
 
 ## Conventions / decisions
 
