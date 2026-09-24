@@ -13,7 +13,7 @@ namespace Cr1140.AvaloniaDemo.ViewModels;
 /// while CR1102 drives the primary and secondary LEDs. F1 cycles LED A colour, F2 cycles
 /// LED B colour, F3 cycles the animation mode.
 /// </summary>
-public sealed class LedsViewModel : ViewModelBase
+public sealed class LedsViewModel : ViewModelBase, IDisposable
 {
     // LED A: first profile LED (CR1140 status binary, CR1102 primary PWM).
     private static readonly (string Name, string Hex, byte R, byte G, byte B)[] LedAColors =
@@ -47,11 +47,11 @@ public sealed class LedsViewModel : ViewModelBase
     };
 
     private readonly RgbLed _ledA;
-    private readonly RgbLed _ledB;
     private readonly DispatcherTimer _timer;
-    private LedDriver? _driver;
-    // CR1102 only: the physical function/nav-key backlights (D-Bus, not sysfs). Null elsewhere.
-    private readonly IfmKeyboardLeds? _keyLeds;
+    // Device-agnostic keypad button backlight: sysfs *:kbd_backlight (animated) on CR1140/CR1141,
+    // com.ifm.Keyboard D-Bus (solid) on the CR1102. Resolved from the active device profile.
+    private readonly KeypadBacklight _keypad;
+    private readonly EventHandler _onProcessExit;
 
     private int _ledAIndex = 2;      // Green — "app running" by default.
     private int _ledBIndex = 4;      // Amber.
@@ -72,28 +72,36 @@ public sealed class LedsViewModel : ViewModelBase
     {
         var profile = Program.Profile;
         _ledA = profile.Leds.Count > 0 ? profile.Leds[0] : throw new InvalidOperationException("Profile has no LEDs");
-        _ledB = profile.Leds.Count > 1 ? profile.Leds[1] : throw new InvalidOperationException("Profile needs 2 LEDs");
 
-        // CR1102 drives its key backlights over com.ifm.Keyboard D-Bus (they are not sysfs
-        // LEDs); LED B's colour also lights the physical keys. Null on CR1140/CR1141.
-        _keyLeds = profile.KeypadBacklightViaDbus ? new IfmKeyboardLeds() : null;
+        // The keypad button backlight is device-agnostic: sysfs *:kbd_backlight (animated) on
+        // CR1140/CR1141, com.ifm.Keyboard D-Bus (solid) on the CR1102. The facade hides the
+        // transport so this screen drives "the keypad backlight" the same way everywhere.
+        _keypad = KeypadBacklight.For(profile);
 
-        // ~30 Hz so LedMode.Pulse breathes smoothly; the driver writes sysfs only on change.
+        // Turn the keypad backlight off when the process exits so the MCU-owned CR1102 keys do
+        // not stay lit after the app quits (best-effort: runs on normal exit / SIGTERM).
+        _onProcessExit = (_, _) => _keypad.Off();
+        AppDomain.CurrentDomain.ProcessExit += _onProcessExit;
+
+        // ~30 Hz so LedMode.Pulse breathes smoothly; the driver writes only on change.
         _timer = new DispatcherTimer(
             TimeSpan.FromMilliseconds(33),
             DispatcherPriority.Background,
-            (_, _) => _driver?.Tick());
+            (_, _) => _keypad.Tick());
 
-        // Compute LED metadata for display
+        // LED metadata for display.
+        var kb = profile.Leds.FirstOrDefault(l => l.Role == LedRole.KeypadBacklight);
         LedAName = _ledA.Name.ToUpper();
-        LedBName = _keyLeds != null ? "KEYPAD" : _ledB.Name.ToUpper();
+        LedBName = "KEYPAD";
         LedASubtitle = $"{_ledA.Name} · {(_ledA.IsBinary ? "binary" : "PWM")} RGB · {_ledA.RedLeaf}";
-        LedBSubtitle = _keyLeds != null
+        LedBSubtitle = profile.KeypadBacklightViaDbus
             ? "Keypad button LEDs · com.ifm.Keyboard D-Bus · solid"
-            : $"{_ledB.Name} · {(_ledB.IsBinary ? "binary" : "PWM")} RGB · {_ledB.RedLeaf}";
+            : kb is not null
+                ? $"Keypad backlight · {(kb.IsBinary ? "binary" : "PWM")} RGB · {kb.RedLeaf}"
+                : "No keypad backlight on this device";
 
-        // Assert the initial state at construction (app start): LED A goes green,
-        // signalling the app is running even before the LEDs screen is opened.
+        // Assert the initial state at construction (app start): LED A goes green, signalling the
+        // app is running even before the LEDs screen is opened.
         ApplyLedA();
         ApplyLedB();
         ApplyMode();
@@ -153,20 +161,19 @@ public sealed class LedsViewModel : ViewModelBase
     /// <summary>Screen entered: re-assert the LEDs and start ticking the LED B animation.</summary>
     public void Activate()
     {
-        // Fresh driver so the first tick always re-writes LED B (the previous
-        // Deactivate turned it off directly, bypassing the driver's change-detection cache).
-        _driver = new LedDriver(_ledB);
+        // Re-assert LED B and its mode on entry; the keypad backlight facade persists across
+        // screen switches (Deactivate turned it off), so the next tick re-writes the colour.
         ApplyLedA();
         ApplyLedB();
         ApplyMode();
         _timer.Start();
     }
 
-    /// <summary>Screen left: stop the animation and turn LED B off (LED A persists).</summary>
+    /// <summary>Screen left: stop the animation and turn the keypad backlight off (LED A persists).</summary>
     public void Deactivate()
     {
         _timer.Stop();
-        LedSysfs.SetRgb(_ledB, 0, 0, 0);
+        _keypad.Off();
     }
 
     private void ApplyLedA()
@@ -181,9 +188,7 @@ public sealed class LedsViewModel : ViewModelBase
     private void ApplyLedB()
     {
         var c = LedBColors[_ledBIndex];
-        _driver?.SetColor((c.R, c.G, c.B));
-        // CR1102: also light the physical key backlights (solid) over D-Bus.
-        _keyLeds?.SetAll(c.R, c.G, c.B);
+        _keypad.SetColor((c.R, c.G, c.B));
         BacklightName = c.Name;
         BacklightHex = c.Hex;
     }
@@ -191,8 +196,8 @@ public sealed class LedsViewModel : ViewModelBase
     private void ApplyMode()
     {
         var mode = Modes[_modeIndex];
-        _driver?.SetMode(mode);
-        ModeName = LedAnimation.Name(mode);
+        _keypad.SetMode(mode);
+        ModeName = _keypad.SupportsAnimation ? LedAnimation.Name(mode) : "solid (fixed)";
     }
 
     private void RefreshHardwareState(bool ok)
@@ -200,5 +205,13 @@ public sealed class LedsViewModel : ViewModelBase
         HardwareState = ok
             ? "sysfs /sys/class/leds — OK"
             : "sysfs /sys/class/leds — no write access";
+    }
+
+    /// <summary>Unhooks the process-exit reset and turns the keypad backlight off.</summary>
+    public void Dispose()
+    {
+        AppDomain.CurrentDomain.ProcessExit -= _onProcessExit;
+        _timer.Stop();
+        _keypad.Off();
     }
 }

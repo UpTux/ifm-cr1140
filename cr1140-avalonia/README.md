@@ -298,6 +298,23 @@ led.SetMode(LedMode.Pulse);                  // 2 s breathe
 led.Tick();   // samples the curve, writes sysfs only when the value changes
 ```
 
+**Device-agnostic keypad backlight.** The keypad button backlight is wired differently
+per SKU — the sysfs `*:kbd_backlight` PWM LED on the CR1140/CR1141, but the
+`com.ifm.Keyboard` D-Bus keyboard MCU on the CR1102 (whose keys are **not** sysfs LEDs).
+`KeypadBacklight.For(profile)` hides that so one call site drives every device:
+
+```csharp
+using Cr1140.Avalonia.Leds;
+using Cr1140.Avalonia.Devices;
+
+var keypad = KeypadBacklight.For(DeviceProfiles.Cr1102);  // or the active device profile
+keypad.SetColor((0, 128, 255));   // CR1140: sysfs PWM · CR1102: D-Bus (solid, applied now)
+keypad.SetMode(LedMode.Pulse);    // animated where supported; ignored on the solid D-Bus path
+keypad.Tick();                    // pump ~30 Hz for animation (no-op on the D-Bus path)
+// ...on teardown, so the MCU-owned CR1102 keys do not stay lit after the app exits:
+keypad.Off();                     // sysfs writes 0 · CR1102 issues com.ifm.Keyboard ResetLeds
+```
+
 ### Namespace: `Cr1140.Avalonia.Leds`
 
 | Type | Role |
@@ -307,6 +324,8 @@ led.Tick();   // samples the curve, writes sysfs only when the value changes
 | `enum LedMode` | Animation curve: `Solid`, `Dim` (50%), `Pulse` (2 s breathe), `Blink` (1 Hz), `Flash` (~4 Hz strobe), `Heartbeat` (double-beat). |
 | `LedAnimation` | Pure math (host-testable, no hardware): `Name(mode)`, `Level(mode, t)`, `Scale((r,g,b), level)`. |
 | `LedDriver` | Holds a base color + `LedMode`; `SetColor`/`SetMode`; `Tick()` writes the keypad backlight only when the computed color changes. New driver is off/`Solid`, no write until the first `Tick`. |
+| `KeypadBacklight` | **Device-agnostic** keypad button backlight. `For(profile)` picks the sysfs PWM LED (CR1140/CR1141, animated) or the `com.ifm.Keyboard` D-Bus keys (CR1102, solid). `SetColor`/`SetMode`/`Tick`/`Off`, `IsPresent`/`SupportsAnimation`; fail-soft off-device. |
+| `IfmKeyboardLeds` | Low-level CR1102 key-backlight driver over `com.ifm.Keyboard` D-Bus (`SetAll`/`Reset` via `gdbus`, fire-and-forget). Prefer `KeypadBacklight`; use directly only for CR1102-specific control. |
 
 `LedAnimation` is **pure BCL** (host-testable like `CpuSampler`); `LedSysfs`/`LedDriver`
 are the sysfs wirings. This mirrors the Rust `cr1140-hal` `sys` LED functions and the
