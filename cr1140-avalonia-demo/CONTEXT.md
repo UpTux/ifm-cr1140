@@ -62,7 +62,7 @@ beyond the minimum for input and font.
 
 ## Conventions / decisions
 
-- **Avalonia 12.1.3, .NET 10**: version is pinned; `<TargetFramework>net10.0</TargetFramework>`.
+- **Avalonia 12.1.3; multi-targets .NET 8/9/10**: `<TargetFrameworks>net8.0;net9.0;net10.0</TargetFrameworks>`. Device deploy publishes **net10.0** — `just publish-avalonia` / `run-emulator` pass `-f net10.0`.
 - **Software Skia only**: no GL (the i.MX 8M Nano has no usable GL driver). Both output backends render with CPU Skia — the tear-free `RotatingDrmOutput` (DRM/KMS DUMB double-buffer + page-flip, **default**) and `RotatingFbdevOutput` (fbdev, opt-in via `--fbdev`). Avalonia's GL-based `DrmOutput` is deliberately unused. On-device A/B (identical build, idle Menu) showed both at ~4% of one core and ~90 MB RSS, so DRM is default for its tear-free output at no measurable cost.
 - **Custom evdev input backend**: Avalonia's stock LinuxFramebuffer input is touch/pointer only. This SKU is keypad-only (no touch), so `EvdevKeypadInput` polls `/dev/input/event1` and raises `KeyPressed` events. The 24-byte `input_event` layout is verified on-device (`sizeof(struct input_event)` on aarch64 glibc 2.35).
 - **Cross-published from macOS**: `just publish-avalonia` runs `dotnet publish` on macOS, targeting `linux-arm64`. NativeAOT is skipped (requires a Linux builder; standard self-contained publish is sufficient for this demo).

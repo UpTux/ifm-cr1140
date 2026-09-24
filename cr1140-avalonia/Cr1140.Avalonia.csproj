@@ -1,6 +1,6 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
-    <TargetFramework>net8.0</TargetFramework>
+    <TargetFrameworks>net8.0;net9.0;net10.0</TargetFrameworks>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <RootNamespace>Cr1140.Avalonia</RootNamespace>
@@ -13,7 +13,7 @@
   <PropertyGroup>
     <IsPackable>true</IsPackable>
     <PackageId>Cr1140.Avalonia</PackageId>
-    <Version>0.14.0</Version>
+    <Version>0.15.0</Version>
     <Authors>Patrick Dahlke</Authors>
     <Company>UpTux UG (haftungsbeschränkt)</Company>
     <Product>Cr1140.Avalonia</Product>
@@ -26,7 +26,7 @@
     <RepositoryType>git</RepositoryType>
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <PackageTags>cr1140;cr1141;cr1102;ifm;ecomatdisplay;avalonia;linuxframebuffer;fbdev;drm;kms;evdev;keypad;gestures;softkey;led;leds;backlight;brightness;display;telemetry;metrics;procfs;embedded;aarch64;imx8mn;perf;overlay;fps;diagnostics;hud;watchdog;systemd;sdnotify;liveness;emulator;desktop;deviceprofile</PackageTags>
-    <PackageReleaseNotes>0.14.0 — Upgrade to Avalonia 12 (12.1.3), from Avalonia 11.3.20. Migrates the custom software output backends (RotatingFbdevOutput / RotatingDrmOutput) to Avalonia 12's platform render-surface API: IFramebufferPlatformSurface / IFramebufferRenderTarget moved to the Avalonia.Platform.Surfaces namespace, and LockedFramebuffer now carries an AlphaFormat (Opaque for RGB565, Premul for 32-bpp XRGB8888). This package's own public API is unchanged — the input backends, SoftKeyFooter control, LED/backlight control, system telemetry, perf overlay, device profiles and desktop emulator are all identical. Requires Avalonia 12; consumers must move their Avalonia package references to 12.x (Avalonia 11 is no longer supported). The i.MX 8M Nano still has no usable GL driver, so both output backends remain software Skia and Avalonia's GL-based stock DrmOutput stays unused.</PackageReleaseNotes>
+    <PackageReleaseNotes>0.15.0 — Multi-targets net8.0, net9.0 and net10.0 (previously net8.0 only): the package now ships lib/net8.0, lib/net9.0 and lib/net10.0 assemblies, so consumers on any of the three runtimes resolve a matching build instead of running the net8.0 assembly on a roll-forward. Adds a device-agnostic keypad button backlight — the new Cr1140.Avalonia.Leds.KeypadBacklight picks the right transport per SKU behind one KeypadBacklight.For(profile) entry point: the sysfs *:kbd_backlight PWM LED (CR1140/CR1141, animated LedMode curves) or the com.ifm.Keyboard keyboard-MCU D-Bus keys (CR1102, solid); every operation is fail-soft off-device. The rest of the public API — input backends, SoftKeyFooter, LED/backlight control, telemetry, perf overlay, device profiles and desktop emulator — is unchanged from 0.14.0. Still requires Avalonia 12 (12.1.3); consumers must reference Avalonia 12.x (Avalonia 11 is not supported).</PackageReleaseNotes>
     <IncludeSymbols>true</IncludeSymbols>
     <SymbolPackageFormat>snupkg</SymbolPackageFormat>
     <PublishRepositoryUrl>true</PublishRepositoryUrl>

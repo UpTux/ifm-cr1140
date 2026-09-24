@@ -1,7 +1,8 @@
 # Avalonia demo — how to build and deploy
 
-This guide covers the **cr1140-avalonia-demo** (.NET 10 / Avalonia 12.1.3 operator
-panel) deployment to the CR1140 device (aarch64 glibc 2.35, fbdev 800×480, keypad).
+This guide covers the **cr1140-avalonia-demo** (Avalonia 12.1.3 operator panel;
+multi-targets .NET 8/9/10, deployed as net10.0) deployment to the CR1140 device
+(aarch64 glibc 2.35, fbdev 800×480, keypad).
 
 ## Device facts recap
 
@@ -34,8 +35,8 @@ only**. This SKU is **keypad-only** (no touch), so the demo includes a hand-roll
 The keypad input backend and reusable UI controls have been extracted from the demo
 into a standalone **NuGet package** (`Cr1140.Avalonia`, version **0.3.0**) under
 `cr1140-avalonia/`. It is dual-licensed **GPL-3.0-only** (for open source) or
-**commercial** (contact UpTux UG <info@uptux.de>). The package targets .NET 8.0 and
-depends on Avalonia 12.1.3 + Avalonia.LinuxFramebuffer 12.1.3 only.
+**commercial** (contact UpTux UG <info@uptux.de>). The package multi-targets .NET
+8.0, 9.0 and 10.0 and depends on Avalonia 12.1.3 + Avalonia.LinuxFramebuffer 12.1.3 only.
 
 Version 0.3.0 adds the **`SoftKeyFooter`** control (namespace
 `Cr1140.Avalonia.Controls`), a 6-key soft-key footer with two layout modes:

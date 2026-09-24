@@ -58,7 +58,7 @@ avdir := "/home/cds-apps/cr1140-avalonia-demo"
 
 # Cross-publish the Avalonia demo from macOS to linux-arm64 (self-contained)
 publish-avalonia:
-    dotnet publish cr1140-avalonia-demo/Cr1140.AvaloniaDemo.csproj -c Release -r linux-arm64 --self-contained true -p:InvariantGlobalization=true -o cr1140-avalonia-demo/publish/linux-arm64
+    dotnet publish cr1140-avalonia-demo/Cr1140.AvaloniaDemo.csproj -c Release -f net10.0 -r linux-arm64 --self-contained true -p:InvariantGlobalization=true -o cr1140-avalonia-demo/publish/linux-arm64
 
 # Deploy + autostart the Avalonia demo (stops CODESYS + app-launcher + cr1140-app, enables cr1140-avalonia.service)
 deploy-avalonia: publish-avalonia
@@ -75,7 +75,7 @@ run-avalonia: publish-avalonia
 
 # Run the Avalonia demo in the desktop emulator (CR1140 bezel window on this host; no device needed)
 run-emulator:
-    dotnet run --project cr1140-avalonia-demo -- --emulator
+    dotnet run --project cr1140-avalonia-demo -f net10.0 -- --emulator
 
 # Restore stock services (unmask CODESYS/app-launcher, stop cr1140-avalonia)
 restore-avalonia:
