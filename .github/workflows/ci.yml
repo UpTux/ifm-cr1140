@@ -26,7 +26,7 @@ jobs:
     name: fmt / clippy / test
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       # Stable toolchain pinned to a major tag; rustfmt + clippy components.
       - name: Install Rust (stable)
@@ -56,7 +56,7 @@ jobs:
     name: zigbuild aarch64-musl
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Install Rust (stable)
         uses: dtolnay/rust-toolchain@stable
